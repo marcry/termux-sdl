@@ -1,0 +1,13 @@
+--- SDL2_ttf-2.0.15/SDL_ttf.h	2019-01-13 03:44:11.000000000 +0800
++++ termux-sdl/app/src/main/jni/SDL2_ttf/SDL_ttf.h	2020-07-29 22:27:22.331912575 +0800
+@@ -279,6 +279,10 @@
+ /* Get the kerning size of two glyphs */
+ extern DECLSPEC int TTF_GetFontKerningSizeGlyphs(TTF_Font *font, Uint16 previous_ch, Uint16 ch);
+ 
++
++// 设置字体大小
++extern DECLSPEC void SDLCALL TTF_SetFontSize(TTF_Font *font, int ptsize);
++
+ /* We'll use SDL for reporting errors */
+ #define TTF_SetError    SDL_SetError
+ #define TTF_GetError    SDL_GetError

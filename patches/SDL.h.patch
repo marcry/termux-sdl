@@ -1,0 +1,23 @@
+--- SDL2-2.0.12/include/SDL.h	2020-03-11 09:36:18.000000000 +0800
++++ termux-sdl/app/src/main/jni/SDL2/include/SDL.h	2020-07-29 22:27:19.908579000 +0800
+@@ -60,7 +60,11 @@
+ #include "SDL_version.h"
+ #include "SDL_video.h"
+ 
++// 打印日志到Java程序
++#include "SDL_android_log.h"
++
+ #include "begin_code.h"
++
+ /* Set up for C function definitions, even when using C++ */
+ #ifdef __cplusplus
+ extern "C" {
+@@ -125,6 +129,8 @@
+  */
+ extern DECLSPEC void SDLCALL SDL_Quit(void);
+ 
++
++
+ /* Ends C function definitions when using C++ */
+ #ifdef __cplusplus
+ }

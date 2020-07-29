@@ -2190,7 +2190,7 @@ void TTF_SetFontSize(TTF_Font *font, int ptsize) {
  
 	//font->glyph_italics *= font->height;
 	
-	Flush_Cache(font); //这个非常重要
+	Flush_Cache(font); 
 }
 
 

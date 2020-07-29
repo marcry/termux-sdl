@@ -85,27 +85,14 @@ make run
 
  **** 
 
-screenshot1.jpg
-![image](https://raw.githubusercontent.com/Lzhiyong/termux-sdl/master/screenshots/screenshot1.jpg)
+## Screenshots
 
+<a href="./screenshots/screenshot1.jpg"><img src="./screenshots/screenshot1.jpg" width="30%" /></a>
+<a href="./screenshots/screenshot2.jpg"><img src="./screenshots/screenshot2.jpg" width="30%" /></a>
+<a href="./screenshots/screenshot3.jpg"><img src="./screenshots/screenshot3.jpg" width="30%" /></a>
+<a href="./screenshots/screenshot4.jpg"><img src="./screenshots/screenshot4.jpg" width="30%" /></a>
+<a href="./screenshots/screenshot5.jpg"><img src="./screenshots/screenshot5.jpg" width="30%" /></a>
+<a href="./screenshots/screenshot6.jpg"><img src="./screenshots/screenshot6.jpg" width="30%" /></a>
 
-screenshot2.jpg
-![image](https://raw.githubusercontent.com/Lzhiyong/termux-sdl/master/screenshots/screenshot2.jpg)
-
-
-screenshot3.jpg
-![image](https://raw.githubusercontent.com/Lzhiyong/termux-sdl/master/screenshots/screenshot3.jpg)
-
-
-screenshot4.jpg
-![image](https://raw.githubusercontent.com/Lzhiyong/termux-sdl/master/screenshots/screenshot4.jpg)
-
-
-screenshot5.jpg
-![image](https://raw.githubusercontent.com/Lzhiyong/termux-sdl/master/screenshots/screenshot5.jpg)
-
-
-screenshot6.jpg
-![image](https://raw.githubusercontent.com/Lzhiyong/termux-sdl/master/screenshots/screenshot6.jpg)
  **** 
 
