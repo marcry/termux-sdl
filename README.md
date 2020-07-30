@@ -153,12 +153,11 @@ bool load_image()
 	return true;
 }
  
-bool display_image()
+void display_image()
 {
 	SDL_RenderCopy(render, texture, NULL, NULL);
 	SDL_RenderPresent(render);
 	SDL_Delay(3000);
-	return true;
 }
  
 void quit()
