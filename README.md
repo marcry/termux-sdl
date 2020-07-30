@@ -104,11 +104,11 @@ make run
 
 #include "SDL2/SDL.h"
 
+#define WIDTH 640
+#define HEIGHT 480
+
 // define log tag
 #define TAG "HELLO_WORLD" 
-
-#define WIDTH 640;
-#define HEIGHT 480;
 
 SDL_Window* window = NULL;
 SDL_Renderer* render = NULL;
