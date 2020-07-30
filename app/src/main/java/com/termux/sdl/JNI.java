@@ -12,7 +12,7 @@ public final class JNI {
 
     public static native int chDir(String path);
 
-	public static native String getEnv(String name);
+    public static native String getEnv(String name);
 	
     public static native String getSDLVersion(int lib);
 

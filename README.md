@@ -107,8 +107,8 @@ make run
 // define log tag
 #define TAG "HELLO_WORLD" 
 
-const int WIDTH = 640;
-const int HEIGHT = 480;
+#define WIDTH 640;
+#define HEIGHT 480;
 
 SDL_Window* window = NULL;
 SDL_Renderer* render = NULL;
