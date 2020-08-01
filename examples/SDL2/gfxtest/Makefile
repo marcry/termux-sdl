@@ -21,13 +21,13 @@ SDLRUN = am start -S $(shell am 2>&1| grep -q '\-\-user' && echo '--user 0') -n 
 OBJS = $(TARGET).o
 
 $(TARGET): $(OBJS)
-	$(CC) -o lib$@.so $^ $(LDFLAGS)
+    $(CC) -o lib$@.so $^ $(LDFLAGS)
 
 clean:
-		rm -f $(OBJS) lib$(TARGET).so
+    rm -f $(OBJS) lib$(TARGET).so
 
 run: $(TARGET)
-		$(SDLRUN) $(PWD)/lib$(TARGET).so
+    $(SDLRUN) $(PWD)/lib$(TARGET).so
 
 log:
-	logcat -d | grep SDL
+    logcat -d | grep SDL
