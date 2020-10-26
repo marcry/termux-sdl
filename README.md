@@ -108,7 +108,7 @@ make run
 #define HEIGHT 480
 
 // define log tag
-#define TAG "HELLO_WORLD" 
+#define TAG "SDL_LOG" 
 
 SDL_Window* window = NULL;
 SDL_Renderer* render = NULL;
