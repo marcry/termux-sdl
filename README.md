@@ -2,7 +2,7 @@
 
 This is a termux sdl plugin for compiling and running SDL2 and native app
 
-### How to compiling SDL2 and native program:
+#### How to compiling SDL2 and native program:
 
 ```bash
 # extract the examples/libs.zip file to /data/data/com.termux/files/usr/lib
@@ -22,7 +22,7 @@ make run
     <img src="./screenshot/example4.jpg" width="33%" /><img src="./screenshot/example5.jpg" width="33%" />
 </div>
 
-### using ffplay to play video and audio
+#### using ffplay to play video and audio
 
 At the same time, I added ffplay, so it can also be used as a local player</br>
 
