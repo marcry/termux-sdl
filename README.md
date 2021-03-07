@@ -6,10 +6,10 @@ This is a termux sdl plugin for compiling and running SDL2 and native app
 
 ```bash
 # extract the examples/libs.zip file to /data/data/com.termux/files/usr/lib
-unzip -d /data/data/com.termux/files/usr/lib libs.zip
+unzip libs.zip -d /data/data/com.termux/files/usr/lib
 
 # extract the examples/headers.zip file to /data/data/com.termux/files/usr/include
-unzip -d /data/data/com.termux/files/usr/include headers.zip
+unzip headers.zip -d /data/data/com.termux/files/usr/include
 
 # compiling the examples
 cd /path/to/termux-sdl/examples/SDL2/draw2
