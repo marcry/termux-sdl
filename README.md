@@ -51,7 +51,7 @@ ffplay -af atempo=2.0 -vf setpts=1/2*PTS -i /sdcard/video/test.mp4
 
 ----
 
-**How to use SDL_AndroidLogPrint method click [here](https://github.com/Lzhiyong/termux-sdl/blob/master/examples/test_log.c) for example**
+How to use SDL_AndroidLogPrint method click [here](https://github.com/Lzhiyong/termux-sdl/blob/master/examples/test_log.c) for example
 
 <div align="left">
     <img src="./screenshot/ffplay.jpg" width="50%" /><img src="./screenshot/log.jpg" width="50%" />
