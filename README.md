@@ -28,8 +28,7 @@ make run
 At the same time, I added ffplay, so it can also be used as a local player</br>
 
 ffplay has implemented a progress bar and time display</br>
-swipe the left side of the screen to control the brightness</br> 
-swipe the right side of the screen to control the volume</br>
+swipe the left side of the screen to control the brightness, swipe the right side of the screen to control the volume</br>
 the progress bar is drawn by SDL2_gfx, the time is drawn by SDL2_ttf
 
 ```bash
