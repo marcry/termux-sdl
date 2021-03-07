@@ -18,9 +18,10 @@ make run
 ----
 
 <div align="left">
-    <img src="./screenshot/example1.jpg" width="33%" /><img src="./screenshot/example2.jpg" width="33%" /><img src="./screenshot/example3.jpg" width="33%" /></br>
-    <img src="./screenshot/example4.jpg" width="33%" /><img src="./screenshot/example5.jpg" width="33%" />
+    <img src="./screenshot/example1.jpg" width="33%" /><img src="./screenshot/example2.jpg" width="33%" /><img src="./screenshot/example3.jpg" width="33%" />
 </div>
+
+----
 
 #### using ffplay to play video and audio
 
