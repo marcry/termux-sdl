@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # this is a ffplay wrapper,for termux to exec ffplay command
-# put ffplay script to /data/data/com.termux/files/usr/bin
+# copy this script to /data/data/com.termux/files/usr/bin
 # how to use:
 # ffplay -i /sdcard/video/test.mp4
 # 2x playback speed: ffplay -af atempo=2.0 -vf setpts=1/2*PTS -i /sdcard/video/test.mp4
 # add subtitles: ffplay -vf subtitles=test.srt -i /sdcard/video/test.mp4
 
-function print_usage() {
+function print_help() {
 	echo "Simple media player"
 	echo "Usage: ffplay [options] input_file"
 	echo "Main options:"
@@ -62,13 +62,13 @@ function print_usage() {
 }
 
 
-# start playing function
-function start_play() {
+# start playing 
+function start_playing() {
 	if [ $# -ne 0 ];
 	then
 		ARGS=$@
 	else
-		print_usage
+		print_help
 		exit 
 	fi
 
@@ -76,6 +76,4 @@ function start_play() {
 }
 
 # start...
-start_play $@
-
-
+start_playing $@
