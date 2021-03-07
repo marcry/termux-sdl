@@ -1,4 +1,4 @@
-## termux-sdl
+### termux-sdl
 
 This is a termux sdl plugin for compiling and running SDL2 and native app
 
@@ -32,9 +32,6 @@ swipe the left side of the screen to control the brightness</br>
 swipe the right side of the screen to control the volume</br>
 the progress bar is drawn by SDL2_gfx, the time is drawn by SDL2_ttf
 
-There are still some problems with ffplay, 
-when playing at playback speed, drag the progress bar, the time is inaccurate, and the video and audio are not synchronized
-
 ```bash
 # example/SDL2/ffplay/ffplay is a shell command, not a real binary file
 cp example/SDL2/ffplay/ffplay /data/data/com.termux/files/usr/bin
@@ -59,3 +56,9 @@ ffplay -af atempo=2.0 -vf setpts=1/2*PTS -i /sdcard/video/test.mp4
 <div align="left">
     <img src="./screenshot/ffplay.jpg" width="50%" /><img src="./screenshot/log.jpg" width="50%" />
 </div>
+
+----
+### Issues
+There are still some problems with ffplay, 
+when playing at playback speed, drag the progress bar, the time is inaccurate, and the video and audio are not synchronized
+
