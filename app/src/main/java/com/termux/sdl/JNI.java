@@ -3,7 +3,7 @@ package com.termux.sdl;
 public final class JNI {
 
     static {
-        System.loadLibrary("termux_sdl");
+        System.loadLibrary("config");
     }
 
     public static native int setEnv(String name, String value, boolean overwrite);
