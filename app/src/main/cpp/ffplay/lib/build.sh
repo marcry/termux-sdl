@@ -49,6 +49,8 @@ function build_ffmpeg_android() {
         --sysroot=$SYSROOT \
         --extra-cflags="-Os -fpic -march=armv8-a" \
         $BUILD_CONFIG
+    
+    make install -j16
 }
 
 # static or shared
