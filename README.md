@@ -1,6 +1,6 @@
 ### termux-sdl
 
-This is a termux sdl plugin for compiling and running SDL2 and native app
+This is a termux sdl plugin for compiling and running SDL2 and native app.
 
 #### How to compiling SDL2 and native program:
 
@@ -25,11 +25,11 @@ make run
 
 #### using ffplay to play video and audio
 
-At the same time, I added ffplay, so it can also be used as a local player</br>
+At the same time, I added ffplay, so it can also be used as a local player.</br>
 
 ffplay has implemented a progress bar and time display</br>
-swipe the left side of the screen to control the brightness, swipe the right side of the screen to control the volume</br>
-the progress bar is drawn by SDL2_gfx, the time is drawn by SDL2_ttf
+swipe the left side of the screen to control the brightness, swipe the right side of the screen to control the volume.</br>
+the progress bar is drawn by SDL2_gfx, the time is drawn by SDL2_ttf.
 
 ```bash
 # copy ffplay to /data/data/com.termux/files/usr/bin
@@ -51,7 +51,7 @@ ffplay -af atempo=2.0 -vf setpts=1/2*PTS -i /sdcard/video/test.mp4
 
 ----
 
-How to use `SDL_AndroidLogPrint` method click [here](https://github.com/Lzhiyong/termux-sdl/blob/master/examples/test_log.c) for example
+How to use `SDL_AndroidLogPrint` method click [here](https://github.com/Lzhiyong/termux-sdl/blob/master/examples/test_log.c) for example.
 
 <div align="left">
     <img src="./screenshot/ffplay.jpg" width="50%" /><img src="./screenshot/log.jpg" width="50%" />
