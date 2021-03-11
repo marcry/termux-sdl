@@ -2,7 +2,7 @@
 
 NDK_TOOLCHAIN=$HOME/android/android-ndk-r22/toolchains/llvm/prebuilt/linux-aarch64
 
-ANDROID_API=21
+ANDROID_API=24
 
 CC=$NDK_TOOLCHAIN/bin/aarch64-linux-android$ANDROID_API-clang
 CXX=$NDK_TOOLCHAIN/bin/aarch64-linux-android$ANDROID_API-clang++
