@@ -59,5 +59,7 @@ How to use SDL_AndroidLogPrint method click [here](https://github.com/Lzhiyong/t
 ----
 ### Issues
 * There are still some problems with ffplay, 
-when playing at playback speed, drag the progress bar, the time is inaccurate, and the video and audio are not synchronized
+when playing at playback speed, drag the progress bar, the time is inaccurate, and the video and audio are not synchronized.
+
+* You can also add some external libraries, such as x264 x265 fdk_aac, etc. to better support ffplay.
 
