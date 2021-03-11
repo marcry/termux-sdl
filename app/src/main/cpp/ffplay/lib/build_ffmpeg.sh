@@ -7,7 +7,6 @@ ANDROID_API=21
 CC=$NDK_TOOLCHAIN/bin/aarch64-linux-android$ANDROID_API-clang
 CXX=$NDK_TOOLCHAIN/bin/aarch64-linux-android$ANDROID_API-clang++
 
-
 CROSS_PREFIX=$NDK_TOOLCHAIN/bin/aarch64-linux-android-
 SYSROOT=$NDK_TOOLCHAIN/sysroot
 
