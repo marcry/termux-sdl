@@ -34,6 +34,7 @@ the progress bar is drawn by SDL2_gfx, the time is drawn by SDL2_ttf
 ```bash
 # copy ffplay to /data/data/com.termux/files/usr/bin
 cp example/SDL2/ffplay/ffplay /data/data/com.termux/files/usr/bin
+chmod 755 /data/data/com.termux/files/usr/bin/ffplay
 
 # Play video
 ffplay -i /sdcard/video/test.mp4
