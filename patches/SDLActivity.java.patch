@@ -1,6 +1,5 @@
---- diff -uN --ignore-matching-lines=RE --ignore-all-space --ignore-blank-lines --color=auto /sdcard/download/SDLActivity.java app/src/main/java/org/libsdl/app/SDLActivity.java > patches/SDLActivity.java.patch
 --- /sdcard/download/SDLActivity.java	2021-03-11 12:51:42.228001319 +0800
-+++ app/src/main/java/org/libsdl/app/SDLActivity.java	2021-03-11 12:51:00.704663849 +0800
++++ app/src/main/java/org/libsdl/app/SDLActivity.java	2021-03-11 13:00:05.904718161 +0800
 @@ -4,13 +4,16 @@
  import android.app.AlertDialog;
  import android.app.Dialog;
@@ -336,13 +335,12 @@
 -               // "SDL2_mixer",
 -               // "SDL2_net",
 -               // "SDL2_ttf",
--               "main"
 +               "SDL2_image",
 +               "SDL2_mixer",
 +               "SDL2_net",
 +               "SDL2_ttf",
 +               "SDL2_gfx",
-+		       "main",
+                "main"
                 };
      }
  
