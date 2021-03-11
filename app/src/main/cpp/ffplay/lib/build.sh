@@ -41,10 +41,10 @@ function build_ffmpeg_android() {
         --enable-pic \
         --enable-jni \
         --enable-cross-compile \
-        --target-os=android \
         --cross-prefix=$CROSS_PREFIX \
         --sysroot=$SYSROOT \
-        --extra-cflags="-Os -fpic -march=armv8-a" \
+        --extra-cflags="-Os -fPIC -march=armv8-a" \
+        --target-os=android \
         $BUILD_CONFIG
     
     make install -j16
