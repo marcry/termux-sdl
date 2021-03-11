@@ -42,7 +42,6 @@ ffplay -i /sdcard/video/test.mp4
 # play music whit 1.5x speed
 ffplay -af atempo=1.5 -i /sdcard/music/hello.flac
 
-
 # 2x speed playback
 ffplay -af atempo=2.0 -vf setpts=1/2*PTS -i /sdcard/video/test.mp4
 
