@@ -31,6 +31,7 @@ function build_ffmpeg_android() {
         --disable-doc \
         --disable-symver \
         --disable-debug \
+        --enable-indev=lavfi \
         --enable-gpl \
         --enable-small \
         --enable-neon \

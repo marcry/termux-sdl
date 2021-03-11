@@ -1,0 +1,495 @@
+--- diff -uN --ignore-matching-lines=RE --ignore-all-space --ignore-blank-lines --color=auto /sdcard/download/SDLActivity.java app/src/main/java/org/libsdl/app/SDLActivity.java > patches/SDLActivity.java.patch
+--- /sdcard/download/SDLActivity.java	2021-03-11 12:51:42.228001319 +0800
++++ app/src/main/java/org/libsdl/app/SDLActivity.java	2021-03-11 12:51:00.704663849 +0800
+@@ -4,13 +4,16 @@
+ import android.app.AlertDialog;
+ import android.app.Dialog;
+ import android.app.UiModeManager;
++import android.content.ContentResolver;
+ import android.content.Context;
+ import android.content.DialogInterface;
+ import android.content.Intent;
++import android.content.SharedPreferences;
+ import android.content.pm.ActivityInfo;
+ import android.content.pm.ApplicationInfo;
+ import android.content.pm.PackageManager;
+ import android.content.res.Configuration;
++import android.content.res.Resources;
+ import android.graphics.Bitmap;
+ import android.graphics.Color;
+ import android.graphics.PixelFormat;
+@@ -20,11 +23,18 @@
+ import android.hardware.SensorEvent;
+ import android.hardware.SensorEventListener;
+ import android.hardware.SensorManager;
++import android.media.AudioManager;
++import android.net.Uri;
+ import android.os.Build;
+ import android.os.Bundle;
+ import android.os.Handler;
+ import android.os.Message;
++import android.preference.PreferenceManager;
++import android.provider.Settings;
++import android.text.Editable;
+ import android.text.InputType;
++import android.text.Layout;
++import android.text.TextWatcher;
+ import android.util.DisplayMetrics;
+ import android.util.Log;
+ import android.util.SparseArray;
+@@ -48,17 +58,20 @@
+ import android.widget.Button;
+ import android.widget.LinearLayout;
+ import android.widget.RelativeLayout;
++import android.widget.ScrollView;
+ import android.widget.TextView;
+ import java.io.IOException;
+ import java.io.InputStream;
++import java.lang.reflect.Field;
+ import java.lang.reflect.Method;
+ import java.util.Hashtable;
++import java.util.ArrayList;
+ 
+ /**
+     SDL Activity
+ */
+ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityChangeListener {
+-    private static final String TAG = "SDL";
++    private static final String TAG = "SDLActivity";
+ 
+     public static boolean mIsResumedCalled, mHasFocus;
+     public static final boolean mHasMultiWindow = (Build.VERSION.SDK_INT >= 24);
+@@ -109,6 +122,259 @@
+     protected static SDLGenericMotionListener_API12 mMotionListener;
+     protected static HIDDeviceManager mHIDDeviceManager;
+ 
++    protected static AudioManager mAudioManager;
++    protected static SharedPreferences mPreferences;
++    private static final int ANDROID_LOG_INFO = 0;
++    private static final int ANDROID_LOG_ERROR = 1;
++    private static final int SET_BRIGHTNESS = 2;
++    private static TextView text = null;
++    private static ScrollView scrollView = null;
++    private static String err = null;
++    private static final int MAX_LINE = 200;
++    private static ArrayList<String> textList = new ArrayList<>();
++    
++    
++    protected static Handler mHandler = new Handler() {
++
++        @Override
++        public void handleMessage(Message msg) {
++            super.handleMessage(msg);
++
++            switch(msg.what) {
++
++            case ANDROID_LOG_INFO:
++                textList.add((String)msg.obj);
++                text.append((String)msg.obj);
++                
++                break;
++            case ANDROID_LOG_ERROR:
++                err = (String)msg.obj;
++                textList.add(err);
++                text.append(err);
++                break;
++            case SET_BRIGHTNESS:
++                // set brightness
++                int brightness = (int)msg.obj;
++                setRealBrightness(brightness);
++                break;
++            }
++        }
++    };
++
++
++    // set brightness range[0..100]
++    // called by JNI from SDL
++    public static void setRealBrightness(int brightness) {
++
++        WindowManager.LayoutParams lp = mSingleton.getWindow().getAttributes();
++
++        int maxBrightness = getMaxBrightness();
++
++        // range[0..100] brightness * maxBrightness / 100
++        lp.screenBrightness = Float.valueOf(brightness * maxBrightness / 100) * (1f / maxBrightness);
++        mSingleton.getWindow().setAttributes(lp);
++    }
++
++
++    // cannot update the ui in the child thread
++    public static void setBrightness(int brightness) {
++        Message msg = mHandler.obtainMessage(SET_BRIGHTNESS);
++        msg.obj = brightness;
++        mHandler.sendMessage(msg);
++    }
++
++
++    // set brightness and keeping, even app has been exit
++    public static void saveBrightness(int brightness) {
++        ContentResolver resolver = mSingleton.getContentResolver();
++        Uri uri = android.provider.Settings.System.getUriFor(Settings.System.SCREEN_BRIGHTNESS);
++        android.provider.Settings.System.putInt(resolver, Settings.System.SCREEN_BRIGHTNESS, brightness);
++        resolver.notifyChange(uri, null);
++    }
++
++
++    // get current brightness range[0..100] 
++    // called by JNI from SDL
++    public static int getBrightness() {
++        int brightness = 0;
++        int maxBrightness = getMaxBrightness();
++        ContentResolver resolver = mSingleton.getContentResolver();
++        try {
++            brightness = android.provider.Settings.System.getInt(resolver, Settings.System.SCREEN_BRIGHTNESS);
++            Log.i(TAG, "curr brightness: " + brightness);
++        } catch(Exception e) {
++            e.printStackTrace();
++        }
++        // [0..100]range
++        return brightness / maxBrightness * 100;
++    }
++
++    // get the maximum brightness, default 255
++    // but in some custom ROM, this value may not be 255
++    public static int getMaxBrightness() {
++        int maxBrightness = 255;
++        try {
++            Resources res = Resources.getSystem();
++            int id = res.getIdentifier("config_screenBrightnessSettingMaximum", "integer", "android");
++            if(id != 0) {
++                maxBrightness = res.getInteger(id);
++                Log.i(TAG, "max brightness: " + maxBrightness);
++            }
++        } catch(Exception e) {
++            Log.e(TAG, e.getMessage());
++        }
++
++        return maxBrightness;
++    }
++
++
++    // enable/disable auto brightness
++    public static boolean autoBrightness(boolean enable) {
++        int result = 0;
++        if(enable) {
++            result = Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC; //开启
++        } else {
++            result = Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL;//关闭
++        }
++        return Settings.System.putInt(mSingleton.getContentResolver(),
++                                      Settings.System.SCREEN_BRIGHTNESS_MODE,
++                                      result);
++    }
++
++
++    // Determine whether to turn on auto brightness
++    public static boolean isAutoBrightness() {
++        ContentResolver resolver = mSingleton.getContentResolver();
++        boolean isAutomicBrightness = false;
++        try {
++            isAutomicBrightness = Settings.System.getInt(resolver,
++                                  Settings.System.SCREEN_BRIGHTNESS_MODE) == Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC;
++        } catch(Settings.SettingNotFoundException e) {
++            Log.e(TAG, e.getMessage());
++        }
++        return isAutomicBrightness;
++    }
++
++
++    // set volume range[0..100] 
++    // called by JNI from SDL
++    public static void setVolume(int volume) {
++        if(mAudioManager != null) {
++            //Log.i(TAG, "min volume: " + mAudioManager.getStreamMinVolume(AudioManager.STREAM_MUSIC));
++            //Log.i(TAG, "max volume: " + mAudioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
++            int maxVolume = mAudioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
++            mAudioManager.setStreamVolume(AudioManager.STREAM_MUSIC, volume * maxVolume / 100, AudioManager.FLAG_PLAY_SOUND);
++        }
++    }
++
++    // get current volume range[0..100] 
++    // called by JNI from SDL
++    public static int getVolume() {
++        if(mAudioManager != null) {
++            int currVolume =  mAudioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
++            int maxVolume = mAudioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
++            //Log.i(TAG, "currVolume: " + currVolume);
++            return currVolume / maxVolume * 100;
++        }
++        return 0;
++    }
++
++    // get log from SDL2
++    protected static void nativeLogPrint(String info, int logLevel) {
++
++        Message msg = null;
++
++        if(logLevel == ANDROID_LOG_INFO)
++            msg = mHandler.obtainMessage(ANDROID_LOG_INFO);
++        else if(logLevel == ANDROID_LOG_ERROR)
++            msg = mHandler.obtainMessage(ANDROID_LOG_ERROR);
++
++        msg.obj = info;
++        mHandler.sendMessage(msg);
++        try {
++            Thread.sleep(5);
++        } catch(InterruptedException e) {
++            e.printStackTrace();
++        }
++    }
++
++ 
++    private static TextWatcher watcher = new TextWatcher() {
++
++        @Override
++        public void beforeTextChanged(CharSequence s, int start, int count, int after) {
++            // TODO: Implement this method
++           
++        }
++
++        @Override
++        public void onTextChanged(CharSequence s, int start, int before, int count) {
++            // TODO: Implement this method
++        }
++
++        @Override
++        public void afterTextChanged(Editable s) {
++            // TODO: Implement this method
++
++            int size = textList.size();
++            // 当总共行数为MAX_LINE * 25 + 1时清空text文本，TextView显示大量的文本会卡顿
++            int line = MAX_LINE * 25 + 1;
++            if(size >= line && (size % line == 0)) {
++                s.clear();
++                textList.clear();
++            }
++            
++            int scrollX = scrollView.getScrollX();
++
++            int scrollY = text.getPaddingTop() 
++                + text.getHeight()
++                + text.getPaddingBottom();
++            scrollView.scrollTo(scrollX, scrollY);
++        }
++    };
++    
++    // show logcat dialog
++    public static void showLogcatDialog() {
++
++        AlertDialog.Builder builder = new AlertDialog.Builder(mSingleton);
++        builder.setView(scrollView);
++       
++        String error = mPreferences.getString("error", "");
++        
++        if(!error.isEmpty() && text.getText().toString().isEmpty()) {
++            text.setTextColor(Color.RED);
++            text.setText(error);
++            mPreferences.edit().putString("error", "").commit();
++        }
++
++        // remove child view，otherwise it will happen
++        // java.lang.IllegalStateException: The specified child already has a parent.
++        // You must call removeView() on the child's parent first.
++        ViewGroup viewGroup = (ViewGroup) scrollView.getParent();
++        if(viewGroup != null) viewGroup.removeAllViewsInLayout();
++
++        builder.setTitle("Logcat");
++        builder.setNegativeButton("clear", new DialogInterface.OnClickListener() {
++
++            @Override
++            public void onClick(DialogInterface dialog, int which) {
++                text.setText("");
++                textList.clear();
++                mPreferences.edit().putString("error", "").commit();
++            }
++        });
++        builder.setPositiveButton(android.R.string.cancel, new DialogInterface.OnClickListener() {
++
++            @Override
++            public void onClick(DialogInterface dialog, int which) {
++                dialog.dismiss();
++            }
++        });
++        builder.setCancelable(true).show();
++        
++    }
++
++
+     // This is what SDL runs in. It invokes SDL_main(), eventually
+     protected static Thread mSDLThread;
+ 
+@@ -136,7 +402,7 @@
+         if (libraries.length > 0) {
+             library = "lib" + libraries[libraries.length - 1] + ".so";
+         } else {
+-            library = "libmain.so";
++            library = "libmian.so";
+         }
+         return getContext().getApplicationInfo().nativeLibraryDir + "/" + library;
+     }
+@@ -161,15 +427,16 @@
+         return new String[] {
+                "hidapi",
+                "SDL2",
+-               // "SDL2_image",
+-               // "SDL2_mixer",
+-               // "SDL2_net",
+-               // "SDL2_ttf",
+-               "main"
++               "SDL2_image",
++               "SDL2_mixer",
++               "SDL2_net",
++               "SDL2_ttf",
++               "SDL2_gfx",
++		       "main",
+                };
+     }
+ 
+-    // Load the .so
++    // Load the all of so
+     public void loadLibraries() {
+         for (String lib : getLibraries()) {
+             SDL.loadLibrary(lib);
+@@ -204,6 +471,53 @@
+         mCurrentNativeState = NativeState.INIT;
+     }
+ 
++
++    // show error dialog
++    protected static void showErrorDialog(String err) {
++
++        AlertDialog.Builder builder  = new AlertDialog.Builder(mSingleton);
++
++        builder.setMessage("An error occurred while trying to start the application. Please try again and/or reinstall."
++                           + System.getProperty("line.separator")
++                           + System.getProperty("line.separator")
++                           + "Error: " + err);
++        builder.setTitle("SDL Error");
++        builder.setPositiveButton("Exit",
++        new DialogInterface.OnClickListener() {
++            @Override
++            public void onClick(DialogInterface dialog, int id) {
++                // if this button is clicked, close current activity
++                SDLActivity.mSingleton.finish();
++            }
++        });
++
++
++        AlertDialog dialog = builder.create();
++        dialog.setCancelable(false);
++        dialog.setCanceledOnTouchOutside(false);
++        dialog.show();
++
++        
++        try {
++            Field mAlert = AlertDialog.class.getDeclaredField("mAlert");
++            mAlert.setAccessible(true);
++            Object mAlertController = mAlert.get(dialog);
++            // get message textview
++            Field mMessage = mAlertController.getClass().getDeclaredField("mMessageView");
++            mMessage.setAccessible(true);
++            TextView mMessageView = (TextView) mMessage.get(mAlertController);
++            // set dialog message text color
++            mMessageView.setTextColor(Color.RED);
++
++        } catch(NoSuchFieldException e) {
++            e.printStackTrace();
++        } catch(IllegalAccessException e) {
++            e.printStackTrace();
++        } catch(IllegalArgumentException e) {
++            e.printStackTrace();
++        }
++    }
++
+     // Setup
+     @Override
+     protected void onCreate(Bundle savedInstanceState) {
+@@ -234,23 +549,7 @@
+ 
+         if (mBrokenLibraries) {
+             mSingleton = this;
+-            AlertDialog.Builder dlgAlert  = new AlertDialog.Builder(this);
+-            dlgAlert.setMessage("An error occurred while trying to start the application. Please try again and/or reinstall."
+-                                + System.getProperty("line.separator")
+-                                + System.getProperty("line.separator")
+-                                + "Error: " + errorMsgBrokenLib);
+-            dlgAlert.setTitle("SDL Error");
+-            dlgAlert.setPositiveButton("Exit",
+-                                       new DialogInterface.OnClickListener() {
+-                                           @Override
+-                                           public void onClick(DialogInterface dialog,int id) {
+-                                               // if this button is clicked, close current activity
+-                                               SDLActivity.mSingleton.finish();
+-                }
+-            });
+-            dlgAlert.setCancelable(false);
+-            dlgAlert.create().show();
+-
++            showErrorDialog(errorMsgBrokenLib);
+             return;
+         }
+ 
+@@ -264,6 +563,28 @@
+         mSingleton = this;
+         SDL.setContext(this);
+ 
++        // 初始化显示log的TextView
++        text = new TextView(this);
++        text.setTextIsSelectable(true);
++        text.setMaxLines(MAX_LINE);
++        text.setTextSize(16);
++        text.setPadding(70, 10, 0, 0);
++        text.setTextColor(0xff15ab15);
++        text.addTextChangedListener(watcher);
++        //text.setMovementMethod(ScrollingMovementMethod.getInstance());
++        text.setHint("Logcat为SDL2传入Java程序的日志\n"
++                     
++                     + "要想显示日志，需要在你自己的SDL2程序里调用SDL_AndroidLogPrint方法\n\n"
++                     
++                     + "Logcat is the log of the java program passed into the SDL2 program.\n"
++                     + "To display the log, you need to call the SDL_AndroidLogPrint method in your own SDL2 program.\n");
++
++        scrollView = new ScrollView(this);
++        scrollView.addView(text);
++        mPreferences = PreferenceManager.getDefaultSharedPreferences(this);
++
++        mAudioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
++
+         mClipboardHandler = new SDLClipboardHandler_API11();
+ 
+         mHIDDeviceManager = HIDDeviceManager.acquire(this);
+@@ -290,6 +611,7 @@
+         if (intent != null && intent.getData() != null) {
+             String filename = intent.getData().getPath();
+             if (filename != null) {
++                System.out.println("file name: " + filename);
+                 Log.v(TAG, "Got filename: " + filename);
+                 SDLActivity.onNativeDropFile(filename);
+             }
+@@ -432,11 +754,15 @@
+     protected void onDestroy() {
+         Log.v(TAG, "onDestroy()");
+ 
++        if(err != null && !err.isEmpty())
++            mPreferences.edit().putString("error", err).commit();
++        
+         if (mHIDDeviceManager != null) {
+             HIDDeviceManager.release(mHIDDeviceManager);
+             mHIDDeviceManager = null;
+         }
+-
++        textList.clear();
++        text.setText("");
+         if (SDLActivity.mBrokenLibraries) {
+             super.onDestroy();
+             return;
+@@ -456,7 +782,7 @@
+         }
+ 
+         SDLActivity.nativeQuit();
+-
++        System.exit(0);
+         super.onDestroy();
+     }
+ 

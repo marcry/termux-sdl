@@ -153,7 +153,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
                 text.append(err);
                 break;
             case SET_BRIGHTNESS:
-                // 设置亮度
+                // set brightness
                 int brightness = (int)msg.obj;
                 setRealBrightness(brightness);
                 break;
@@ -162,15 +162,15 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     };
 
 
-    // set brightness[0..100]
-    // the method is called by jni
+    // set brightness range[0..100]
+    // called by JNI from SDL
     public static void setRealBrightness(int brightness) {
 
         WindowManager.LayoutParams lp = mSingleton.getWindow().getAttributes();
 
         int maxBrightness = getMaxBrightness();
 
-        // [0..100]range brightness * maxBrightness / 100
+        // range[0..100] brightness * maxBrightness / 100
         lp.screenBrightness = Float.valueOf(brightness * maxBrightness / 100) * (1f / maxBrightness);
         mSingleton.getWindow().setAttributes(lp);
     }
@@ -193,7 +193,8 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     }
 
 
-    // get current brightness[0..100] the method is called by jni
+    // get current brightness range[0..100] 
+    // called by JNI from SDL
     public static int getBrightness() {
         int brightness = 0;
         int maxBrightness = getMaxBrightness();
@@ -255,7 +256,8 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     }
 
 
-    // set volume[0..100] the method is called by jni
+    // set volume range[0..100] 
+    // called by JNI from SDL
     public static void setVolume(int volume) {
         if(mAudioManager != null) {
             //Log.i(TAG, "min volume: " + mAudioManager.getStreamMinVolume(AudioManager.STREAM_MUSIC));
@@ -265,7 +267,8 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         }
     }
 
-    // get current volume[0..100] the method is called by jni
+    // get current volume range[0..100] 
+    // called by JNI from SDL
     public static int getVolume() {
         if(mAudioManager != null) {
             int currVolume =  mAudioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
@@ -422,24 +425,14 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
      */
     protected String[] getLibraries() {
         return new String[] {
-                   "hidapi",
-                   "SDL2",
-                   "SDL2_image",
-                   "SDL2_mixer",
-                   "SDL2_net",
-                   "SDL2_ttf",
-                   "SDL2_gfx",
-                   /*
-		           "avcodec",
-		           "avutil",
-		           "avdevice",
-		           "avfilter",
-		           "avformat",
-		           "swscale",
-		           "swresample",
-		           "postproc",
-		           */
-		           "main",
+               "hidapi",
+               "SDL2",
+               "SDL2_image",
+               "SDL2_mixer",
+               "SDL2_net",
+               "SDL2_ttf",
+               "SDL2_gfx",
+		       "main",
                };
     }
 
