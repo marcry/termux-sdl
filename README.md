@@ -23,7 +23,7 @@ make run
 
 ----
 
-#### using ffplay to play video and audio
+#### Using ffplay to play video and audio
 
 At the same time, I added ffplay, so it can also be used as a local player.</br>
 
@@ -36,7 +36,7 @@ the progress bar is drawn by SDL2_gfx, the time is drawn by SDL2_ttf.
 cp example/SDL2/ffplay/ffplay /data/data/com.termux/files/usr/bin
 chmod 755 /data/data/com.termux/files/usr/bin/ffplay
 
-# Play video
+# play video
 ffplay -i /sdcard/video/test.mp4
 
 # play music whit 1.5x speed
