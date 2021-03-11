@@ -1,5 +1,5 @@
---- /sdcard/download/SDLActivity.java	2021-03-11 12:51:42.228001319 +0800
-+++ app/src/main/java/org/libsdl/app/SDLActivity.java	2021-03-11 13:00:05.904718161 +0800
+--- /sdcard/download/SDLActivity.java	2021-03-11 13:05:32.354750682 +0800
++++ app/src/main/java/org/libsdl/app/SDLActivity.java	2021-03-11 13:04:36.418078443 +0800
 @@ -4,13 +4,16 @@
  import android.app.AlertDialog;
  import android.app.Dialog;
@@ -329,19 +329,19 @@
      }
 @@ -161,15 +427,16 @@
          return new String[] {
-                "hidapi",
-                "SDL2",
--               // "SDL2_image",
--               // "SDL2_mixer",
--               // "SDL2_net",
--               // "SDL2_ttf",
-+               "SDL2_image",
-+               "SDL2_mixer",
-+               "SDL2_net",
-+               "SDL2_ttf",
-+               "SDL2_gfx",
-                "main"
-                };
+             "hidapi",
+             "SDL2",
+-            // "SDL2_image",
+-            // "SDL2_mixer",
+-            // "SDL2_net",
+-            // "SDL2_ttf",
++            "SDL2_image",
++            "SDL2_mixer",
++            "SDL2_net",
++            "SDL2_ttf",
++            "SDL2_gfx",
+             "main"
+         };
      }
  
 -    // Load the .so
