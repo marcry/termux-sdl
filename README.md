@@ -32,7 +32,7 @@ swipe the left side of the screen to control the brightness, swipe the right sid
 the progress bar is drawn by SDL2_gfx, the time is drawn by SDL2_ttf
 
 ```bash
-# example/SDL2/ffplay/ffplay is a shell command, not a real binary file
+# copy ffplay to /data/data/com.termux/files/usr/bin
 cp example/SDL2/ffplay/ffplay /data/data/com.termux/files/usr/bin
 
 # Play video
@@ -58,6 +58,6 @@ How to use SDL_AndroidLogPrint method click [here](https://github.com/Lzhiyong/t
 
 ----
 ### Issues
-There are still some problems with ffplay, 
+* There are still some problems with ffplay, 
 when playing at playback speed, drag the progress bar, the time is inaccurate, and the video and audio are not synchronized
 

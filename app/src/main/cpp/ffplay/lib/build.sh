@@ -26,12 +26,9 @@ function build_ffmpeg_android() {
     ../configure \
         --cc=$CC \
         --cxx=$CXX \
-        --arch=arm64 \
+        --arch=aarch64 \
         --cpu=armv8-a \
         --prefix=$HOME/ffmpeg \
-        --disable-ffmpeg \
-        --disable-ffplay \
-        --disable-ffprobe \
         --disable-doc \
         --disable-symver \
         --disable-debug \

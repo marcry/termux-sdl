@@ -12,7 +12,7 @@ link_directories(
     ${CMAKE_SOURCE_DIR}/ffplay/lib/static
     )
 
-set(CMAKE_C_FLAGS ${GLOBAL_C_FLAGS})
+set(CMAKE_C_FLAGS "${GLOBAL_C_FLAGS}")
 
 add_library(ffplay SHARED cmdutils.c ffplay.c)
 
