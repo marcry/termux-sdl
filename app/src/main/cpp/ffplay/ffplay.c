@@ -1303,32 +1303,6 @@ static void stream_close(VideoState *is) {
     av_free(is);
 }
 
-// ==================== draw progress =======================
-int start_x, start_y;
-int end_x, end_y;
-float curr_start_x, curr_end_x;
-
-int line_width = 8;
-float progress = 0;
-// 拖动进度条标志
-bool is_seeking_progress = false;
-
-static void draw_progress(SDL_Renderer *renderer) {
-    // 绘制进度条线
-    lineColor(renderer, start_x, start_y, end_x, end_y, 0xFFFFFFFF);
-    // 绘制当前进度 curr_end_x为当前播放进度条 结束的x坐标
-
-    curr_end_x = start_x + (end_x - start_x) * progress / 100;
-    if(curr_end_x > end_x)
-        curr_end_x = end_x;
-    thickLineRGBA(renderer, start_x, start_y,
-                  curr_end_x, end_y, line_width,
-                  0x66, 0xba, 0xff, 0xff);
-
-    // 绘制进度条小圆
-    filledCircleRGBA(renderer, curr_end_x, end_y, line_width * 2,
-                     0x66, 0xba, 0xff, 0xff);
-}
 
 // ==================== draw text =======================
 TTF_Font *font = NULL;
@@ -1354,74 +1328,16 @@ bool is_changing_brightness = false;
 
 const char *font_path = "/system/fonts/DroidSans.ttf";
 
-// 文本位置
-enum text_position {
-    LEFT_TEXT, TOP_TEXT, RIGHT_TEXT, BOTTOM_TEXT, CENTER_TEXT, ANY_TEXT
-};
+// 进度条坐标
+int bar_start_x, start_y;
+int bar_end_x, end_y;
+float curr_bar_start_x, curr_bar_end_x;
 
-// 初始化字体
-static void init_font(const char *font_path, int ptsize) {
+int line_width = 8;
+float progress = 0;
+// 拖动进度条标志
+bool is_seeking_progress = false;
 
-    /* Initialize the TTF library */
-    if(TTF_Init() < 0) {
-        LOGE(program_name, "Init TTF: %s\n", SDL_GetError());
-        return;
-    }
-
-    font = TTF_OpenFont(font_path, ptsize);
-
-    if(!font) {
-        LOGE(program_name, "Couldn't load TTF: %s\n", SDL_GetError());
-        return;
-    }
-
-    // 文本风格
-    TTF_SetFontStyle(font, TTF_STYLE_NORMAL);
-    TTF_SetFontHinting(font, TTF_HINTING_MONO);
-    TTF_SetFontOutline(font, 0);
-    TTF_SetFontKerning(font, 1);
-
-}
-
-// 绘制文本
-static void draw_text(SDL_Renderer *renderer, const char *text, int x, int y, int margin, int flag) {
-
-    // 消除锯齿感绘制文本
-    SDL_Surface *surface = TTF_RenderUTF8_Blended(font, text, text_color);
-    if(!surface) {
-        LOGE(program_name, "Surface: %s\n", SDL_GetError());
-    }
-
-    // 文本纹理
-    SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
-    if(!texture) {
-        LOGE(program_name, "Texture: %s\n", SDL_GetError());
-    }
-
-    // 文本绘制区域
-    text_rect.x = x; // 绘制文本开始x坐标
-    text_rect.y = y; // 绘制文本开始y坐标
-    text_rect.w = surface->w;
-    text_rect.h = surface->h;
-
-    // 如果是绘制右边的文本，文本的开始x坐标需要重新计算
-    // 如果不预先获得文本宽度，则绘制的文本可能显示不全
-    // x = screen_width - surface->w(文本宽度)
-    if(flag == RIGHT_TEXT) {
-        text_rect.x = screen_width - text_rect.w - margin;
-    } else if(flag == BOTTOM_TEXT) {
-        text_rect.y = screen_height - text_rect.h - margin;
-    } else if(flag == CENTER_TEXT) {
-        text_rect.x = screen_width / 2 - text_rect.w / 2;
-        text_rect.y = screen_height / 2 - text_rect.h / 2;
-    }
-
-    SDL_FreeSurface(surface);
-    SDL_RenderCopy(renderer, texture, NULL, &text_rect);
-
-    SDL_DestroyTexture(texture);
-
-}
 
 // 格式化时间
 static void format_time(int seconds, char *time) {
@@ -1470,31 +1386,129 @@ static void set_total_duration(int seconds) {
     format_time(seconds, total_duration);
 }
 
+// 绘制进度条
+static void draw_progress(SDL_Renderer *renderer) {
+    // 绘制进度条线
+    lineColor(renderer, bar_start_x, start_y, bar_end_x, end_y, 0xFFFFFFFF);
+    // 绘制当前进度 curr_bar_end_x为当前播放进度条 结束的x坐标
+
+    curr_bar_end_x = bar_start_x + (bar_end_x - bar_start_x) * progress / 100;
+    if(curr_bar_end_x > bar_end_x)
+        curr_bar_end_x = bar_end_x;
+    thickLineRGBA(renderer, bar_start_x, start_y,
+                  curr_bar_end_x, end_y, line_width,
+                  0x66, 0xba, 0xff, 0xff);
+
+    // 绘制进度条小圆
+    filledCircleRGBA(renderer, curr_bar_end_x, end_y, line_width * 2,
+                     0x66, 0xba, 0xff, 0xff);
+}
+
+
+// 初始化字体
+static void init_font(const char *font_path, int ptsize) {
+
+    /* Initialize the TTF library */
+    if(TTF_Init() < 0) {
+        LOGE(program_name, "Init TTF: %s\n", SDL_GetError());
+        return;
+    }
+
+    font = TTF_OpenFont(font_path, ptsize);
+
+    if(!font) {
+        LOGE(program_name, "Couldn't load TTF: %s\n", SDL_GetError());
+        return;
+    }
+
+    // 文本风格
+    TTF_SetFontStyle(font, TTF_STYLE_NORMAL);
+    TTF_SetFontHinting(font, TTF_HINTING_MONO);
+    TTF_SetFontOutline(font, 0);
+    TTF_SetFontKerning(font, 1);
+
+}
+
+// 测量文本宽度高度
+static SDL_Surface* measure(const char *text) {
+    // 消除锯齿感绘制文本
+    SDL_Surface *surface = TTF_RenderUTF8_Blended(font, text, text_color);
+    if(!surface) {
+        LOGE(program_name, "Surface: %s\n", SDL_GetError());
+    }
+    
+    return surface;
+}
+
+// 绘制文本
+static void draw_text(SDL_Renderer *renderer, SDL_Surface *surface, const char *text, int x, int y) {
+
+    // 文本纹理
+    SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
+    if(!texture) {
+        LOGE(program_name, "Texture: %s\n", SDL_GetError());
+    }
+
+    // 文本绘制坐标
+    text_rect.x = x; // 绘制文本开始x坐标
+    text_rect.y = y; // 绘制文本开始y坐标
+    
+    text_rect.w = surface->w; // 文本宽度
+    text_rect.h = surface->h;  // 文本高度
+
+    SDL_FreeSurface(surface);
+    SDL_RenderCopy(renderer, texture, NULL, &text_rect);
+
+    SDL_DestroyTexture(texture);
+
+}
 
 // 绘制函数
 static void draw(SDL_Renderer *renderer) {
+    int text_x = 0;
+    int text_y = 0;
+    
+    // 绘制文本之前首先测量文本尺寸，用于计算文本坐标
+    // surface->w 文本宽度
+    // surface->h 文本高度
+    SDL_Surface *surface = measure(curr_duration);
+    
     // 绘制左边文本(当前时间)
-    draw_text(renderer, curr_duration, 10, screen_height - 200, 0, LEFT_TEXT);
+    text_x = 10;
+    text_y = screen_height - 200;
+    draw_text(renderer, surface, curr_duration, text_x, text_y);
+
     // 在绘制左边的文本时，设置进度条开始坐标
-    start_x = text_rect.x + text_rect.w + 30;
-    start_y = text_rect.y + text_rect.h / 2;
+    bar_start_x = text_x + surface->w + 30;
+    start_y = text_y + surface->h / 2;
 
     // 绘制右边文本(总共时间)
-    draw_text(renderer, total_duration, screen_width, screen_height - 200, 10, RIGHT_TEXT);
+    surface = measure(total_duration);
+    text_x = screen_width - surface->w - 10;
+    text_y = screen_height - 200;
+    draw_text(renderer, surface, total_duration, text_x, text_y);
+
     // 在绘制右边的文本时，设置进度条结束坐标
-    end_x = text_rect.x - 30;
-    end_y = text_rect.y + text_rect.h / 2;
+    bar_end_x = text_x - 30;
+    end_y = text_y + surface->h / 2;
 
     // 显示当前的音量或者亮度值
     if(is_changing_volume || is_changing_brightness) {
         font_size = 200;
         TTF_SetFontSize(font, font_size);
+        char percent[] = {"100"};
         if(is_changing_volume) {
-            draw_text(renderer, volume_percent, screen_width / 2, screen_height / 2, 0, CENTER_TEXT);
+            strcpy(percent, volume_percent);
         } else {
-            draw_text(renderer, brightness_percent, screen_width / 2, screen_height / 2, 0, CENTER_TEXT);
+            strcpy(percent, brightness_percent);
         }
-
+        
+        surface = measure(percent);
+        text_x = screen_width / 2 - surface->w / 2;
+        text_y = screen_height / 2 - surface->h / 2; 
+        draw_text(renderer, surface, percent, text_x, text_y);
+            
+        // 恢复字体大小
         font_size = 45;
         TTF_SetFontSize(font, font_size);
     }
@@ -1503,6 +1517,7 @@ static void draw(SDL_Renderer *renderer) {
     draw_progress(renderer);
 }
 
+// ================================================
 
 static void do_exit(VideoState *is) {
     if(is) {
@@ -3526,7 +3541,7 @@ static int slide_direction(float touch_x, float touch_y) {
 
 // 判断在屏幕上触摸的位置
 static int touch_position(float touch_x, float touch_y) {
-    if(touch_x >= start_x - 20 && touch_x <= end_x + 20
+    if(touch_x >= bar_start_x - 20 && touch_x <= bar_end_x + 20
             && touch_y >= start_y - 80 && touch_y <= end_y + 80) {
         // 进度条
         return IS_PROGRESS;
@@ -3628,13 +3643,13 @@ static void calcu_progress_percent(float touch_x, float touch_y, double *frac) {
     is_seeking_progress = true;
     is_play_finished = false;
 
-    curr_end_x = touch_x;
-    if(curr_end_x < start_x)
-        curr_end_x = start_x;
-    else if(curr_end_x > end_x)
-        curr_end_x = end_x;
+    curr_bar_end_x = touch_x;
+    if(curr_bar_end_x < bar_start_x)
+        curr_bar_end_x = bar_start_x;
+    else if(curr_bar_end_x > bar_end_x)
+        curr_bar_end_x = bar_end_x;
 
-    *frac = ((curr_end_x - start_x)  / (end_x - start_x));
+    *frac = ((curr_bar_end_x - bar_start_x)  / (bar_end_x - bar_start_x));
     set_current_duration((*frac) * total_time);
 }
 
@@ -3670,7 +3685,6 @@ static void event_loop(VideoState *cur_stream) {
         refresh_loop_wait_event(cur_stream, &event);
         switch(event.type) {
         case SDL_FINGERDOWN: // 触摸按下
-
             touch_x = event.tfinger.x * screen_width;
             touch_y = event.tfinger.y * screen_height;
             old_x = touch_x;
