@@ -404,18 +404,22 @@ static const struct TextureFormatEntry {
                                  { AV_PIX_FMT_NONE,           SDL_PIXELFORMAT_UNKNOWN },
                              };
 
-
+// ==========================================
 // 这些方法实现在src/core/android/SDL_android.c
 
 // 设置亮度
 extern void SDL_AndroidSetBrightness(int);
 // 获取亮度
 extern int SDL_AndroidGetBrightness(void);
+// 最大亮度
+extern int SDL_AndroidGetMaxBrightness(void);
 
 // 设置音量
 extern void SDL_AndroidSetVolume(int);
 // 获取音量
 extern int SDL_AndroidGetVolume(void);
+// 最大音量
+extern int SDL_AndroidGetMaxVolume(void);
 
 // ==========================================
 
@@ -1335,8 +1339,8 @@ int font_size = 45;
 char total_duration[10] = {"00:00"};
 char curr_duration[10] = {"00:00"};
 
-char curr_volume[] = {"100"};
-char curr_bright[] = {"100"};
+char volume_percent[] = {"100"};
+char brightness_percent[] = {"100"};
 
 
 int curr_time, total_time;
@@ -1344,9 +1348,9 @@ float playback_speed = 1.0f;
 // 播放完成标志
 bool is_play_finished = false;
 // 音量改变标志
-bool is_changed_volume = false;
+bool is_volume_changed = false;
 // 亮度改变标志
-bool is_changed_bright = false;
+bool is_brightness_changed = false;
 
 const char *font_path = "/system/fonts/DroidSans.ttf";
 
@@ -1448,7 +1452,7 @@ static void set_playback_speed() {
 }
 
 // SDL_ttf绘制当前时间显示文本
-static void set_curr_duration(int seconds) {
+static void set_current_duration(int seconds) {
     // 当前显示的时间 = 时间 * 播放速度
     if(seconds > total_time)
         seconds = total_time;
@@ -1482,13 +1486,13 @@ static void draw(SDL_Renderer *renderer) {
     end_y = text_rect.y + text_rect.h / 2;
 
     // 显示当前的音量或者亮度值
-    if(is_changed_volume || is_changed_bright) {
+    if(is_volume_changed || is_brightness_changed) {
         font_size = 200;
         TTF_SetFontSize(font, font_size);
-        if(is_changed_volume) {
-            draw_text(renderer, curr_volume, screen_width / 2, screen_height / 2, 0, CENTER_TEXT);
+        if(is_volume_changed) {
+            draw_text(renderer, volume_percent, screen_width / 2, screen_height / 2, 0, CENTER_TEXT);
         } else {
-            draw_text(renderer, curr_bright, screen_width / 2, screen_height / 2, 0, CENTER_TEXT);
+            draw_text(renderer, brightness_percent, screen_width / 2, screen_height / 2, 0, CENTER_TEXT);
         }
 
         font_size = 45;
@@ -1712,8 +1716,8 @@ static void toggle_mute(VideoState *is) {
 }
 
 static void update_volume(VideoState *is, int sign, double step) {
-    double volume_level = is->audio_volume ? (20 * log(is->audio_volume / (double)SDL_MIX_MAXVOLUME) / log(10)) : -1000.0;
-    int new_volume = lrint(SDL_MIX_MAXVOLUME * pow(10.0, (volume_level + sign * step) / 20.0));
+    double volume = is->audio_volume ? (20 * log(is->audio_volume / (double)SDL_MIX_MAXVOLUME) / log(10)) : -1000.0;
+    int new_volume = lrint(SDL_MIX_MAXVOLUME * pow(10.0, (volume + sign * step) / 20.0));
     is->audio_volume = av_clip(is->audio_volume == new_volume ? (is->audio_volume + sign) : new_volume, 0, SDL_MIX_MAXVOLUME);
 }
 
@@ -1914,9 +1918,9 @@ display:
 
             // LOGI(program_name, "curr time: %7.2f\n", get_master_clock(is));
             // 当前播放的时间 (clock * playback_speed)
-            // 当拖动进度条时，由calcu_curr_progress()方法设置当前时间，所有此处要判断is_seek_progress的值
+            // 当拖动进度条时，由calcu_progress_percent()方法设置当前时间，所有此处要判断is_seek_progress的值
             if(!is_play_finished && !is_seek_progress)
-                set_curr_duration(((int)get_master_clock(is)) * playback_speed);
+                set_current_duration(((int)get_master_clock(is)) * playback_speed);
 
 
             av_log(NULL, AV_LOG_INFO,
@@ -3482,68 +3486,74 @@ static void seek_chapter(VideoState *is, int incr) {
 // ============================================================
 
 // 滑动方向
-enum move_direction {
-    MOVE_LEFT, MOVE_UP, MOVE_RIGHT, MOVE_DOWN
+enum slide_action {
+    SLIDE_LEFT, SLIDE_UP, SLIDE_RIGHT, SLIDE_DOWN
 };
 
 float old_x, old_y;
-int volume_level = 0;
-int bright_level = 0;
+int volume_level = -1;
+int max_volume_level = 0;
+int brightness_level = -1;
+int max_brightness_level = 0;
+// 设置临界值为3
+int critical_value = 3;
 
-// 水平方向
-static int check_horizontal_direction(float touch_x) {
-
-    if(touch_x < old_x) {
-        old_x = touch_x;
-        return MOVE_LEFT;
-    } else {
-        old_x = touch_x;
-        return MOVE_RIGHT;
-    }
-}
-
-// 垂直方向
-static int check_vertical_direction(float touch_y) {
-
-    if(touch_y < old_y) {
+static int slide_direction(float touch_x, float touch_y) {
+    
+    if(touch_y < old_y && fabsf(touch_y - old_y) >= critical_value) { 
+        // 向上滑动
         old_y = touch_y;
-        return MOVE_UP;
-    } else {
+        return SLIDE_UP;
+    } else if(touch_y > old_y && fabsf(touch_y - old_y) >= critical_value) {
+        // 向下滑动
         old_y = touch_y;
-        return MOVE_DOWN;
+        return SLIDE_DOWN;
+    } else if(touch_x < old_x && fabsf(touch_x - old_x) >= critical_value) {
+        // 向左滑动
+        old_x = touch_x;
+        return SLIDE_LEFT;
+    } else if(touch_x > old_x && fabsf(touch_x - old_x) >= critical_value) {
+        // 向右滑动
+        old_x = touch_x;
+        return SLIDE_RIGHT;
     }
 }
 
 // 设置亮度
 //SDL_SetWindowBrightness(window, value) not support android
 static void set_brightness_level(float touch_x, float touch_y) {
-    if(touch_x >= 0 && touch_x < screen_width / 2) {
-        is_changed_bright = true;
+    if(touch_x >= 0 && touch_x < screen_width / 2) { // 屏幕左侧
+        is_brightness_changed = true;
 #ifdef __ANDROID__
-        if(bright_level == 0)
-            bright_level = SDL_AndroidGetBrightness();
-#else
-        bright_level = SDL_GetWindowBrightness(window);
-#endif
-        if(check_vertical_direction(touch_y) == MOVE_UP) {
-            // 向上滑动增加亮度
-            ++bright_level;
-            if(bright_level > 100) bright_level = 100;
-        } else {
-            // 向下滑动减少亮度
-            --bright_level;
-            // 最低亮度5
-            if(bright_level < 5) bright_level = 5;
+        if(brightness_level == -1){
+            // 亮度转换为[0..100]
+            brightness_level = (int)(SDL_AndroidGetBrightness() * 100 / max_brightness_level);
         }
-
-        sprintf(curr_bright, "%d", bright_level);
+#else
+        brightness_level = SDL_GetWindowBrightness(window);
+#endif
+        if(slide_direction(touch_x, touch_y) == SLIDE_UP) {
+            // 向上滑动增加亮度
+            ++brightness_level;
+            if(brightness_level > 100) brightness_level = 100;
+        } else if(slide_direction(touch_x, touch_y) == SLIDE_DOWN) {
+            // 向下滑动减少亮度
+            --brightness_level;
+            if(brightness_level < 1) brightness_level = 1;
+        }
+        
+        sprintf(brightness_percent, "%d", brightness_level);
+        
+        // 计算亮度[0..100]转换到[0..max_brightness_level]
+        int brightness = (int)(brightness_level * max_brightness_level / 100);
+        //LOGI(program_name, "brightness = %d\n", brightness);
 
 #ifdef __ANDROID__
         // 调用android方法设置亮度
-        SDL_AndroidSetBrightness(bright_level);
+        SDL_AndroidSetBrightness(brightness);
 #else
         // 调用SDL2方法设置亮度
-        if(SDL_SetWindowBrightness(window, bright_level) < 0) {
+        if(SDL_SetWindowBrightness(window, brightness) < 0) {
             LOGE(program_name, "%s\n", SDL_GetError());
         }
 #endif
@@ -3554,39 +3564,46 @@ static void set_brightness_level(float touch_x, float touch_y) {
 // 设置音量
 static void set_volume_level(VideoState *stream, float touch_x, float touch_y) {
     if(touch_x > screen_width / 2 && touch_x <= screen_width) {
-        is_changed_volume = true;
+        is_volume_changed = true;
         //int volume_level = av_clip(stream->audio_volume, 0, 100);
 
-        // 当volume_level为0时，才调用SDL_AndroidGetVolume()方法
-        // SDL_AndroidGetVolume方法在[0..100]范围内，只会调用一次
-        if(volume_level == 0)
-            volume_level = SDL_AndroidGetVolume();
-
-        if(check_vertical_direction(touch_y) == MOVE_UP) {
+        // 当volume_level为-1时，才调用SDL_AndroidGetVolume()方法，保证这个方法只会调用一次
+        // volume_level为全局变量，保存了当前的音量值
+        if(volume_level == -1) {
+            // 音量转换为[0..100]
+            volume_level = (int)(SDL_AndroidGetVolume() * 100 / max_volume_level);
+        }
+        
+        if(slide_direction(touch_x, touch_y) == SLIDE_UP) {
             // 向上滑动增加音量
             ++volume_level;
-            if(volume_level > 100) volume_level = 100;
-        } else {
+            if(volume_level > 100) 
+                volume_level = 100;
+        } else if(slide_direction(touch_x, touch_y) == SLIDE_DOWN) {
             // 向下滑动减少音量
             --volume_level;
-            if(volume_level < 0) volume_level = 0;
+            if(volume_level < 0) 
+                volume_level = 0;
         }
-
-        sprintf(curr_volume, "%d", volume_level);
-
+        
+        // 计算音量[0..100]转换到[0..max_volume_level]
+        int volume = volume_level * max_volume_level / 100;
+        
         // stream->audio_volume为音频音量，不是系统音量
         // 比如当前系统音量为50，那么audio_volume音量的范围就为[0..50]
         // 也就是说audio_volume的最大值，为当前的系统音量
         if(stream->audio_volume != startup_volume)
-            stream->audio_volume = volume_level;
+            stream->audio_volume = volume;
 
-        SDL_AndroidSetVolume(volume_level);
+        sprintf(volume_percent, "%d", volume_level);
+        
+        SDL_AndroidSetVolume(volume);     
     }
 }
 
 
-// 计算当前进度值
-static void calcu_curr_progress(float touch_x, float touch_y, double *frac) {
+// 计算当前进度百分比值
+static void calcu_progress_percent(float touch_x, float touch_y, double *frac) {
     // 拖动进度条
     if(touch_x >= start_x - 20 && touch_x <= end_x + 20
             && touch_y >= start_y - 80 && touch_y <= end_y + 80) {
@@ -3600,7 +3617,7 @@ static void calcu_curr_progress(float touch_x, float touch_y, double *frac) {
             curr_end_x = end_x;
 
         *frac = ((curr_end_x - start_x)  / (end_x - start_x));
-        set_curr_duration((*frac) * total_time);
+        set_current_duration((*frac) * total_time);
     }
 }
 
@@ -3620,7 +3637,7 @@ static void calcu_curr_progress(float touch_x, float touch_y, double *frac) {
 //    stream_seek(params->stream, ts, 0, 0);
 //}
 
-
+// ============================================================
 
 /* handle an event sent by the GUI */
 static void event_loop(VideoState *cur_stream) {
@@ -3641,25 +3658,17 @@ static void event_loop(VideoState *cur_stream) {
             touch_y = event.tfinger.y * screen_height;
             old_x = touch_x;
             old_y = touch_y;
-
-            curr_timestamp = event.tfinger.timestamp;
-            if(curr_timestamp - last_timestamp <= 300 && last_timestamp != 0) {
-                // 双击事件
-                toggle_pause(cur_stream);
-                last_timestamp = 0;
-            } else {
-                // 单击事件
-                last_timestamp = curr_timestamp;
-                // 计算当前进度值
-                calcu_curr_progress(touch_x, touch_y, &frac);
-            }
+            
+            // 计算当前进度值
+            calcu_progress_percent(touch_x, touch_y, &frac);
             break;
         case SDL_FINGERMOTION: // 触摸移动
             touch_x = event.tfinger.x * screen_width;
             touch_y = event.tfinger.y * screen_height;
             // 计算当前进度值
-            if(!is_changed_bright && !is_changed_volume)
-                calcu_curr_progress(touch_x, touch_y, &frac);
+            if(!is_brightness_changed && !is_volume_changed) {
+                calcu_progress_percent(touch_x, touch_y, &frac);
+            }
 
             // 没有拖动进度条，才允许改变亮度和音量
             if(!is_seek_progress) {
@@ -3667,6 +3676,11 @@ static void event_loop(VideoState *cur_stream) {
                 set_brightness_level(touch_x, touch_y);
                 // 设置音量
                 set_volume_level(cur_stream, touch_x, touch_y);
+            }
+            
+            if(cur_stream->paused) {
+                // 暂停之后，当滑动屏幕时可以继续绘制
+                video_display(cur_stream);
             }
             break;
         case SDL_FINGERUP: // 触摸抬起
@@ -3681,11 +3695,16 @@ static void event_loop(VideoState *cur_stream) {
                     ts += cur_stream->ic->start_time;
                 stream_seek(cur_stream, ts, 0, 0);
             }
-
+            
+            //toggle_full_screen(cur_stream);
+            //cur_stream->force_refresh = 1;
             is_seek_progress = false;
-            is_changed_volume = false;
-            is_changed_bright = false;
-
+            is_volume_changed = false;
+            is_brightness_changed = false;
+            if(cur_stream->paused) {
+                // 暂停之后，当滑动屏幕时可以继续绘制
+                video_display(cur_stream);
+            }
             break;
         case SDL_KEYDOWN:
             if(exit_on_keydown || event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q) {
@@ -3806,11 +3825,14 @@ do_seek:
             }
             if(event.button.button == SDL_BUTTON_LEFT) {
                 static int64_t last_mouse_left_click = 0;
-                if(av_gettime_relative() - last_mouse_left_click <= 500000) {
-                    toggle_full_screen(cur_stream);
-                    cur_stream->force_refresh = 1;
+                if(av_gettime_relative() - last_mouse_left_click <= 300000) {
+                    // 双击暂停
+                    toggle_pause(cur_stream);
                     last_mouse_left_click = 0;
                 } else {
+                    // 单击全屏
+                    //toggle_full_screen(cur_stream);
+                    //cur_stream->force_refresh = 1;
                     last_mouse_left_click = av_gettime_relative();
                 }
             }
@@ -3980,62 +4002,61 @@ static int opt_codec(void *optctx, const char *opt, const char *arg) {
 static int dummy;
 
 static const OptionDef options[] = {
-                                       CMDUTILS_COMMON_OPTIONS
+    CMDUTILS_COMMON_OPTIONS
     { "x", HAS_ARG, { .func_arg = opt_width }, "force displayed width", "width" },
-                              { "y", HAS_ARG, { .func_arg = opt_height }, "force displayed height", "height" },
-                                      { "s", HAS_ARG | OPT_VIDEO, { .func_arg = opt_frame_size }, "set frame size (WxH or abbreviation)", "size" },
-                                              { "fs", OPT_BOOL, { &is_full_screen }, "force full screen" },
-                                              { "an", OPT_BOOL, { &audio_disable }, "disable audio" },
-                                              { "vn", OPT_BOOL, { &video_disable }, "disable video" },
-                                              { "sn", OPT_BOOL, { &subtitle_disable }, "disable subtitling" },
-                                              { "ast", OPT_STRING | HAS_ARG | OPT_EXPERT, { &wanted_stream_spec[AVMEDIA_TYPE_AUDIO] }, "select desired audio stream", "stream_specifier" },
-                                              { "vst", OPT_STRING | HAS_ARG | OPT_EXPERT, { &wanted_stream_spec[AVMEDIA_TYPE_VIDEO] }, "select desired video stream", "stream_specifier" },
-                                              { "sst", OPT_STRING | HAS_ARG | OPT_EXPERT, { &wanted_stream_spec[AVMEDIA_TYPE_SUBTITLE] }, "select desired subtitle stream", "stream_specifier" },
-                                              { "ss", HAS_ARG, { .func_arg = opt_seek }, "seek to a given position in seconds", "pos" },
-                                                      { "t", HAS_ARG, { .func_arg = opt_duration }, "play  \"duration\" seconds of audio/video", "duration" },
-                                                              { "bytes", OPT_INT | HAS_ARG, { &seek_by_bytes }, "seek by bytes 0=off 1=on -1=auto", "val" },
-                                                              { "seek_interval", OPT_FLOAT | HAS_ARG, { &seek_interval }, "set seek interval for left/right keys, in seconds", "seconds" },
-                                                              { "nodisp", OPT_BOOL, { &display_disable }, "disable graphical display" },
-                                                              { "noborder", OPT_BOOL, { &borderless }, "borderless window" },
-                                                              { "alwaysontop", OPT_BOOL, { &alwaysontop }, "window always on top" },
-                                                              { "volume", OPT_INT | HAS_ARG, { &startup_volume}, "set startup volume 0=min 100=max", "volume" },
-                                                              { "f", HAS_ARG, { .func_arg = opt_format }, "force format", "fmt" },
-                                                                      { "pix_fmt", HAS_ARG | OPT_EXPERT | OPT_VIDEO, { .func_arg = opt_frame_pix_fmt }, "set pixel format", "format" },
-                                                                              { "stats", OPT_BOOL | OPT_EXPERT, { &show_status }, "show status", "" },
-                                                                              { "fast", OPT_BOOL | OPT_EXPERT, { &fast }, "non spec compliant optimizations", "" },
-                                                                              { "genpts", OPT_BOOL | OPT_EXPERT, { &genpts }, "generate pts", "" },
-                                                                              { "drp", OPT_INT | HAS_ARG | OPT_EXPERT, { &decoder_reorder_pts }, "let decoder reorder pts 0=off 1=on -1=auto", ""},
-                                                                              { "lowres", OPT_INT | HAS_ARG | OPT_EXPERT, { &lowres }, "", "" },
-                                                                              { "sync", HAS_ARG | OPT_EXPERT, { .func_arg = opt_sync }, "set audio-video sync. type (type=audio/video/ext)", "type" },
-                                                                                      { "autoexit", OPT_BOOL | OPT_EXPERT, { &autoexit }, "exit at the end", "" },
-                                                                                      { "exitonkeydown", OPT_BOOL | OPT_EXPERT, { &exit_on_keydown }, "exit on key down", "" },
-                                                                                      { "exitonmousedown", OPT_BOOL | OPT_EXPERT, { &exit_on_mousedown }, "exit on mouse down", "" },
-                                                                                      { "loop", OPT_INT | HAS_ARG | OPT_EXPERT, { &loop }, "set number of times the playback shall be looped", "loop count" },
-                                                                                      { "framedrop", OPT_BOOL | OPT_EXPERT, { &framedrop }, "drop frames when cpu is too slow", "" },
-                                                                                      { "infbuf", OPT_BOOL | OPT_EXPERT, { &infinite_buffer }, "don't limit the input buffer size (useful with realtime streams)", "" },
-                                                                                      { "window_title", OPT_STRING | HAS_ARG, { &window_title }, "set window title", "window title" },
-                                                                                      { "left", OPT_INT | HAS_ARG | OPT_EXPERT, { &screen_left }, "set the x position for the left of the window", "x pos" },
-                                                                                      { "top", OPT_INT | HAS_ARG | OPT_EXPERT, { &screen_top }, "set the y position for the top of the window", "y pos" },
+    { "y", HAS_ARG, { .func_arg = opt_height }, "force displayed height", "height" },
+    { "s", HAS_ARG | OPT_VIDEO, { .func_arg = opt_frame_size }, "set frame size (WxH or abbreviation)", "size" },
+    { "fs", OPT_BOOL, { &is_full_screen }, "force full screen" },
+    { "an", OPT_BOOL, { &audio_disable }, "disable audio" },
+    { "vn", OPT_BOOL, { &video_disable }, "disable video" },
+    { "sn", OPT_BOOL, { &subtitle_disable }, "disable subtitling" },
+    { "ast", OPT_STRING | HAS_ARG | OPT_EXPERT, { &wanted_stream_spec[AVMEDIA_TYPE_AUDIO] }, "select desired audio stream", "stream_specifier" },
+    { "vst", OPT_STRING | HAS_ARG | OPT_EXPERT, { &wanted_stream_spec[AVMEDIA_TYPE_VIDEO] }, "select desired video stream", "stream_specifier" },
+    { "sst", OPT_STRING | HAS_ARG | OPT_EXPERT, { &wanted_stream_spec[AVMEDIA_TYPE_SUBTITLE] }, "select desired subtitle stream", "stream_specifier" },
+    { "ss", HAS_ARG, { .func_arg = opt_seek }, "seek to a given position in seconds", "pos" },
+    { "t", HAS_ARG, { .func_arg = opt_duration }, "play  \"duration\" seconds of audio/video", "duration" },
+    { "bytes", OPT_INT | HAS_ARG, { &seek_by_bytes }, "seek by bytes 0=off 1=on -1=auto", "val" },
+    { "seek_interval", OPT_FLOAT | HAS_ARG, { &seek_interval }, "set seek interval for left/right keys, in seconds", "seconds" },
+    { "nodisp", OPT_BOOL, { &display_disable }, "disable graphical display" },
+    { "noborder", OPT_BOOL, { &borderless }, "borderless window" },
+    { "alwaysontop", OPT_BOOL, { &alwaysontop }, "window always on top" },
+    { "volume", OPT_INT | HAS_ARG, { &startup_volume}, "set startup volume 0=min 100=max", "volume" },
+    { "f", HAS_ARG, { .func_arg = opt_format }, "force format", "fmt" },
+    { "pix_fmt", HAS_ARG | OPT_EXPERT | OPT_VIDEO, { .func_arg = opt_frame_pix_fmt }, "set pixel format", "format" },
+    { "stats", OPT_BOOL | OPT_EXPERT, { &show_status }, "show status", "" },
+    { "fast", OPT_BOOL | OPT_EXPERT, { &fast }, "non spec compliant optimizations", "" },
+    { "genpts", OPT_BOOL | OPT_EXPERT, { &genpts }, "generate pts", "" },
+    { "drp", OPT_INT | HAS_ARG | OPT_EXPERT, { &decoder_reorder_pts }, "let decoder reorder pts 0=off 1=on -1=auto", ""},
+    { "lowres", OPT_INT | HAS_ARG | OPT_EXPERT, { &lowres }, "", "" },
+    { "sync", HAS_ARG | OPT_EXPERT, { .func_arg = opt_sync }, "set audio-video sync. type (type=audio/video/ext)", "type" },
+    { "autoexit", OPT_BOOL | OPT_EXPERT, { &autoexit }, "exit at the end", "" },
+    { "exitonkeydown", OPT_BOOL | OPT_EXPERT, { &exit_on_keydown }, "exit on key down", "" },
+    { "exitonmousedown", OPT_BOOL | OPT_EXPERT, { &exit_on_mousedown }, "exit on mouse down", "" },
+    { "loop", OPT_INT | HAS_ARG | OPT_EXPERT, { &loop }, "set number of times the playback shall be looped", "loop count" },
+    { "framedrop", OPT_BOOL | OPT_EXPERT, { &framedrop }, "drop frames when cpu is too slow", "" },
+    { "infbuf", OPT_BOOL | OPT_EXPERT, { &infinite_buffer }, "don't limit the input buffer size (useful with realtime streams)", "" },
+    { "window_title", OPT_STRING | HAS_ARG, { &window_title }, "set window title", "window title" },
+    { "left", OPT_INT | HAS_ARG | OPT_EXPERT, { &screen_left }, "set the x position for the left of the window", "x pos" },
+    { "top", OPT_INT | HAS_ARG | OPT_EXPERT, { &screen_top }, "set the y position for the top of the window", "y pos" },
 #if CONFIG_AVFILTER
-                                                                                      { "vf", OPT_EXPERT | HAS_ARG, { .func_arg = opt_add_vfilter }, "set video filters", "filter_graph" },
-                                                                                              { "af", OPT_STRING | HAS_ARG, { &afilters }, "set audio filters", "filter_graph" },
+    { "vf", OPT_EXPERT | HAS_ARG, { .func_arg = opt_add_vfilter }, "set video filters", "filter_graph" },
+    { "af", OPT_STRING | HAS_ARG, { &afilters }, "set audio filters", "filter_graph" },
 #endif
-                                                                                              { "rdftspeed", OPT_INT | HAS_ARG | OPT_AUDIO | OPT_EXPERT, { &rdftspeed }, "rdft speed", "msecs" },
-                                                                                              { "showmode", HAS_ARG, { .func_arg = opt_show_mode}, "select show mode (0 = video, 1 = waves, 2 = RDFT)", "mode" },
-                                                                                                      { "default", HAS_ARG | OPT_AUDIO | OPT_VIDEO | OPT_EXPERT, { .func_arg = opt_default }, "generic catch all option", "" },
-                                                                                                              { "i", OPT_BOOL, { &dummy}, "read specified file", "input_file"},
-                                                                                                              { "codec", HAS_ARG, { .func_arg = opt_codec}, "force decoder", "decoder_name" },
-                                                                                                                      { "acodec", HAS_ARG | OPT_STRING | OPT_EXPERT, {    &audio_codec_name }, "force audio decoder",    "decoder_name" },
-                                                                                                                      { "scodec", HAS_ARG | OPT_STRING | OPT_EXPERT, { &subtitle_codec_name }, "force subtitle decoder", "decoder_name" },
-                                                                                                                      { "vcodec", HAS_ARG | OPT_STRING | OPT_EXPERT, {    &video_codec_name }, "force video decoder",    "decoder_name" },
-                                                                                                                      { "autorotate", OPT_BOOL, { &autorotate }, "automatically rotate video", "" },
-                                                                                                                      {
-                                                                                                                          "find_stream_info", OPT_BOOL | OPT_INPUT | OPT_EXPERT, { &find_stream_info },
-                                                                                                                          "read and decode the streams to fill missing information with heuristics"
-    },
-                                                                                                                      { "filter_threads", HAS_ARG | OPT_INT | OPT_EXPERT, { &filter_nbthreads }, "number of filter threads per graph" },
-                                                                                                                      { NULL, },
-                                                                                                                  };
+    { "rdftspeed", OPT_INT | HAS_ARG| OPT_AUDIO | OPT_EXPERT, { &rdftspeed }, "rdft speed", "msecs" },
+    { "showmode", HAS_ARG, { .func_arg = opt_show_mode}, "select show mode (0 = video, 1 = waves, 2 = RDFT)", "mode" },
+    { "default", HAS_ARG | OPT_AUDIO | OPT_VIDEO | OPT_EXPERT, { .func_arg = opt_default }, "generic catch all option", "" },
+    { "i", OPT_BOOL, { &dummy}, "read specified file", "input_file"},
+    { "codec", HAS_ARG, { .func_arg = opt_codec}, "force decoder", "decoder_name" },
+    { "acodec", HAS_ARG | OPT_STRING | OPT_EXPERT, {    &audio_codec_name }, "force audio decoder",    "decoder_name" },
+    { "scodec", HAS_ARG | OPT_STRING | OPT_EXPERT, { &subtitle_codec_name }, "force subtitle decoder", "decoder_name" },
+    { "vcodec", HAS_ARG | OPT_STRING | OPT_EXPERT, {    &video_codec_name }, "force video decoder",    "decoder_name" },
+    { "autorotate", OPT_BOOL, { &autorotate }, "automatically rotate video", "" },
+    { "find_stream_info", OPT_BOOL | OPT_INPUT | OPT_EXPERT, { &find_stream_info },
+        "read and decode the streams to fill missing information with heuristics" },
+    { "filter_threads", HAS_ARG | OPT_INT | OPT_EXPERT, { &filter_nbthreads }, "number of filter threads per graph" },
+    { NULL, },
+};
+
 
 static void show_usage(void) {
     av_log(NULL, AV_LOG_INFO, "Simple media player\n");
@@ -4177,7 +4198,12 @@ int main(int argc, char **argv) {
 
     // 初始化显示时间字体文件
     init_font(font_path, font_size);
-    SDL_AndroidLogPrint(LOG_INFO, program_name, "hello ffplay %d\n", font_size);
+    // 最大亮度
+    max_brightness_level = SDL_AndroidGetMaxBrightness();
+    // 最大音量
+    max_volume_level = SDL_AndroidGetMaxVolume();
+    
+    SDL_AndroidLogPrint(LOG_INFO, program_name, "Hello ffplay %d\n", font_size);
 
     is = stream_open(input_filename, file_iformat);
     if(!is) {

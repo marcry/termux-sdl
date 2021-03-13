@@ -162,21 +162,25 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     };
 
 
-    // set brightness range[0..100]
-    // called by JNI from SDL
+    // set brightness range[0..maxBrightness]
     public static void setRealBrightness(int brightness) {
 
         WindowManager.LayoutParams lp = mSingleton.getWindow().getAttributes();
 
         int maxBrightness = getMaxBrightness();
+        
+        if(brightness < 0) 
+            brightness =0;
+        else if(brightness > maxBrightness)
+            brightness = maxBrightness;
 
-        // range[0..100] brightness * maxBrightness / 100
-        lp.screenBrightness = Float.valueOf(brightness * maxBrightness / 100) * (1f / maxBrightness);
+        lp.screenBrightness = 1.0f * brightness / maxBrightness;
         mSingleton.getWindow().setAttributes(lp);
     }
 
 
     // cannot update the ui in the child thread
+    // this method called by SDL from JNI
     public static void setBrightness(int brightness) {
         Message msg = mHandler.obtainMessage(SET_BRIGHTNESS);
         msg.obj = brightness;
@@ -192,12 +196,11 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         resolver.notifyChange(uri, null);
     }
 
-
     // get current brightness range[0..100] 
-    // called by JNI from SDL
+    // this method called by SDL from JNI
     public static int getBrightness() {
         int brightness = 0;
-        int maxBrightness = getMaxBrightness();
+       
         ContentResolver resolver = mSingleton.getContentResolver();
         try {
             brightness = android.provider.Settings.System.getInt(resolver, Settings.System.SCREEN_BRIGHTNESS);
@@ -205,8 +208,8 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         } catch(Exception e) {
             e.printStackTrace();
         }
-        // [0..100]range
-        return brightness / maxBrightness * 100;
+        
+        return brightness ;
     }
 
     // get the maximum brightness, default 255
@@ -256,27 +259,40 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     }
 
 
-    // set volume range[0..100] 
-    // called by JNI from SDL
+    // set volume range[0..maxVolume] 
+    // this method called by SDL from JNI
     public static void setVolume(int volume) {
         if(mAudioManager != null) {
             //Log.i(TAG, "min volume: " + mAudioManager.getStreamMinVolume(AudioManager.STREAM_MUSIC));
             //Log.i(TAG, "max volume: " + mAudioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
             int maxVolume = mAudioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-            mAudioManager.setStreamVolume(AudioManager.STREAM_MUSIC, volume * maxVolume / 100, AudioManager.FLAG_PLAY_SOUND);
+            if(volume < 0) 
+                volume = 0;
+            else if(volume > maxVolume) 
+                volume = maxVolume;
+            
+            mAudioManager.setStreamVolume(AudioManager.STREAM_MUSIC, volume, AudioManager.FLAG_PLAY_SOUND);
         }
     }
 
-    // get current volume range[0..100] 
-    // called by JNI from SDL
+    // get current volume range[0..maxVolume] 
+    // this method called by SDL from JNI
     public static int getVolume() {
+        int currVolume = 0;
         if(mAudioManager != null) {
-            int currVolume =  mAudioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
-            int maxVolume = mAudioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+            currVolume =  mAudioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
             //Log.i(TAG, "currVolume: " + currVolume);
-            return currVolume / maxVolume * 100;
         }
-        return 0;
+        return currVolume;
+    }
+    
+    // this method called by SDL from JNI
+    public static int getMaxVolume(){
+        int maxVolume = 0;
+        if(mAudioManager != null) {
+            maxVolume = mAudioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+        }
+        return maxVolume;
     }
 
     // get log from SDL2

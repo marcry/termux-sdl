@@ -325,11 +325,16 @@ static jmethodID midSupportsRelativeMouse;
 static jmethodID midSetBrightness;
 // 获取亮度
 static jmethodID midGetBrightness;
+// 最大亮度
+
+static jmethodID midGetMaxBrightness;
 
 // 设置音量
 static jmethodID midSetVolume;
 // 获取音量
 static jmethodID midGetVolume;
+// 最大音量
+static jmethodID midGetMaxVolume;
 
 // 打印日志
 static jmethodID midLogPrint;
@@ -611,11 +616,15 @@ JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(nativeSetupJNI)(JNIEnv *env, jclass cl
     midSetBrightness = (*env)->GetStaticMethodID(env, mActivityClass, "setBrightness", "(I)V");
     // 获取亮度
     midGetBrightness = (*env)->GetStaticMethodID(env, mActivityClass, "getBrightness", "()I");
+    // 最大亮度
+    midGetMaxBrightness = (*env)->GetStaticMethodID(env, mActivityClass, "getMaxBrightness", "()I");
     
     // 设置音量
     midSetVolume = (*env)->GetStaticMethodID(env, mActivityClass, "setVolume", "(I)V");
     // 获取音量
     midGetVolume = (*env)->GetStaticMethodID(env, mActivityClass, "getVolume", "()I");
+    // 最大音量
+    midGetMaxVolume = (*env)->GetStaticMethodID(env, mActivityClass, "getMaxVolume", "()I");
     
     // 打印日志
     midLogPrint = (*env)->GetStaticMethodID(env, mActivityClass, "nativeLogPrint", "(Ljava/lang/String;I)V");
@@ -649,11 +658,13 @@ JNIEXPORT void JNICALL SDL_JAVA_INTERFACE(nativeSetupJNI)(JNIEnv *env, jclass cl
         !midSetWindowStyle ||
         !midShouldMinimizeOnFocusLoss ||
         !midShowTextInput ||
-        !midSetBrightness || // 设置亮度
-        !midGetBrightness || // 获取亮度
-        !midSetVolume ||     // 设置音量
-        !midGetVolume ||     // 获取音量
-        !midLogPrint ||      // 打印日志
+        !midSetBrightness ||       // 设置亮度
+        !midGetBrightness ||       // 获取亮度
+        !midGetMaxBrightness ||    // 最大亮度
+        !midSetVolume ||           // 设置音量
+        !midGetVolume ||           // 获取音量
+        !midGetMaxVolume ||        // 最大音量
+        !midLogPrint ||            // 打印日志
         !midSupportsRelativeMouse) {
         __android_log_print(ANDROID_LOG_WARN, "SDL", "Missing some Java callbacks, do you have the latest version of SDLActivity.java?");
     }
@@ -1357,6 +1368,11 @@ int SDL_AndroidGetBrightness(void) {
     return (*env)->CallStaticIntMethod(env, mActivityClass, midGetBrightness);
 }
 
+// 最大亮度
+int SDL_AndroidGetMaxBrightness(void) {
+    JNIEnv *env = Android_JNI_GetEnv();
+    return (*env)->CallStaticIntMethod(env, mActivityClass, midGetMaxBrightness);
+}
 
 // 设置音量
 void SDL_AndroidSetVolume(int volume) {
@@ -1370,6 +1386,11 @@ int SDL_AndroidGetVolume(void) {
     return (*env)->CallStaticIntMethod(env, mActivityClass, midGetVolume);
 }
 
+// 最大音量
+int SDL_AndroidGetMaxVolume(void) {
+    JNIEnv *env = Android_JNI_GetEnv();
+    return (*env)->CallStaticIntMethod(env, mActivityClass, midGetMaxVolume);
+}
 
 // 打印日志到Java程序
 void SDL_AndroidLogPrint(int log_level, const char *tag, const char *fmt, ...) {

@@ -29,8 +29,6 @@ target_link_libraries(ffplay
     SDL2_ttf
     SDL2_gfx
     GLESv1_CM
-    camera2ndk
-    mediandk
     z
     log
     )

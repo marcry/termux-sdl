@@ -141,11 +141,15 @@ void Android_ActivityMutex_Lock_Running(void);
 void SDL_AndroidSetBrightness(int);
 // 获取亮度
 int SDL_AndroidGetBrightness(void);
+// 最大亮度
+int SDL_AndroidGetMaxBrightness(void);
 
 // 设置音量
 void SDL_AndroidSetVolume(int);
 // 获取音量
 int SDL_AndroidGetVolume(void);
+// 最大音量
+int SDL_AndroidGetMaxVolume(void);
 
 // 打印log到java层
 void SDL_AndroidLogPrint(int, const char*, const char*, ...)
