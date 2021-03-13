@@ -1306,12 +1306,12 @@ static void stream_close(VideoState *is) {
 // ==================== draw progress =======================
 int start_x, start_y;
 int end_x, end_y;
-float curr_end_x;
+float curr_start_x, curr_end_x;
 
 int line_width = 8;
 float progress = 0;
 // 拖动进度条标志
-bool is_seek_progress = false;
+bool is_seeking_progress = false;
 
 static void draw_progress(SDL_Renderer *renderer) {
     // 绘制进度条线
@@ -1348,9 +1348,9 @@ float playback_speed = 1.0f;
 // 播放完成标志
 bool is_play_finished = false;
 // 音量改变标志
-bool is_volume_changed = false;
+bool is_changing_volume = false;
 // 亮度改变标志
-bool is_brightness_changed = false;
+bool is_changing_brightness = false;
 
 const char *font_path = "/system/fonts/DroidSans.ttf";
 
@@ -1486,10 +1486,10 @@ static void draw(SDL_Renderer *renderer) {
     end_y = text_rect.y + text_rect.h / 2;
 
     // 显示当前的音量或者亮度值
-    if(is_volume_changed || is_brightness_changed) {
+    if(is_changing_volume || is_changing_brightness) {
         font_size = 200;
         TTF_SetFontSize(font, font_size);
-        if(is_volume_changed) {
+        if(is_changing_volume) {
             draw_text(renderer, volume_percent, screen_width / 2, screen_height / 2, 0, CENTER_TEXT);
         } else {
             draw_text(renderer, brightness_percent, screen_width / 2, screen_height / 2, 0, CENTER_TEXT);
@@ -1502,7 +1502,6 @@ static void draw(SDL_Renderer *renderer) {
     // 绘制进度条
     draw_progress(renderer);
 }
-
 
 
 static void do_exit(VideoState *is) {
@@ -1918,8 +1917,8 @@ display:
 
             // LOGI(program_name, "curr time: %7.2f\n", get_master_clock(is));
             // 当前播放的时间 (clock * playback_speed)
-            // 当拖动进度条时，由calcu_progress_percent()方法设置当前时间，所有此处要判断is_seek_progress的值
-            if(!is_play_finished && !is_seek_progress)
+            // 当拖动进度条时，由calcu_progress_percent()方法设置当前时间，所有此处要判断is_seeking_progress的值
+            if(!is_play_finished && !is_seeking_progress)
                 set_current_duration(((int)get_master_clock(is)) * playback_speed);
 
 
@@ -3490,6 +3489,11 @@ enum slide_action {
     SLIDE_LEFT, SLIDE_UP, SLIDE_RIGHT, SLIDE_DOWN
 };
 
+// 触摸位置
+enum touch_action {
+    IS_PROGRESS, IS_SCREEN_LEFT, IS_SCREEN_RIGHT
+};
+
 float old_x, old_y;
 int volume_level = -1;
 int max_volume_level = 0;
@@ -3498,6 +3502,7 @@ int max_brightness_level = 0;
 // 设置临界值为3
 int critical_value = 3;
 
+// 判断在屏幕上滑动的方向
 static int slide_direction(float touch_x, float touch_y) {
     
     if(touch_y < old_y && fabsf(touch_y - old_y) >= critical_value) { 
@@ -3519,117 +3524,129 @@ static int slide_direction(float touch_x, float touch_y) {
     }
 }
 
-// 设置亮度
-//SDL_SetWindowBrightness(window, value) not support android
-static void set_brightness_level(float touch_x, float touch_y) {
-    if(touch_x >= 0 && touch_x < screen_width / 2) { // 屏幕左侧
-        is_brightness_changed = true;
-#ifdef __ANDROID__
-        if(brightness_level == -1){
-            // 亮度转换为[0..100]
-            brightness_level = (int)(SDL_AndroidGetBrightness() * 100 / max_brightness_level);
-        }
-#else
-        brightness_level = SDL_GetWindowBrightness(window);
-#endif
-        if(slide_direction(touch_x, touch_y) == SLIDE_UP) {
-            // 向上滑动增加亮度
-            ++brightness_level;
-            if(brightness_level > 100) brightness_level = 100;
-        } else if(slide_direction(touch_x, touch_y) == SLIDE_DOWN) {
-            // 向下滑动减少亮度
-            --brightness_level;
-            if(brightness_level < 1) brightness_level = 1;
-        }
-        
-        sprintf(brightness_percent, "%d", brightness_level);
-        
-        // 计算亮度[0..100]转换到[0..max_brightness_level]
-        int brightness = (int)(brightness_level * max_brightness_level / 100);
-        //LOGI(program_name, "brightness = %d\n", brightness);
-
-#ifdef __ANDROID__
-        // 调用android方法设置亮度
-        SDL_AndroidSetBrightness(brightness);
-#else
-        // 调用SDL2方法设置亮度
-        if(SDL_SetWindowBrightness(window, brightness) < 0) {
-            LOGE(program_name, "%s\n", SDL_GetError());
-        }
-#endif
+// 判断在屏幕上触摸的位置
+static int touch_position(float touch_x, float touch_y) {
+    if(touch_x >= start_x - 20 && touch_x <= end_x + 20
+            && touch_y >= start_y - 80 && touch_y <= end_y + 80) {
+        // 进度条
+        return IS_PROGRESS;
+    } else if(touch_x >= 0 && touch_x < screen_width / 2) {
+        // 屏幕左侧
+        return IS_SCREEN_LEFT;
+    } else if(touch_x > screen_width / 2 && touch_x <= screen_width) {
+        // 屏幕右侧
+        return IS_SCREEN_RIGHT;
     }
 }
 
+// 计算亮度
+static int calcu_brightness_level(float touch_x, float touch_y){
+#ifdef __ANDROID__
+    if(brightness_level == -1){
+        // 亮度转换为[0..100]
+        brightness_level = (int)(SDL_AndroidGetBrightness() * 100 / max_brightness_level);
+    }
+#else
+    brightness_level = SDL_GetWindowBrightness(window);
+#endif
+
+    if(slide_direction(touch_x, touch_y) == SLIDE_UP) {
+        // 向上滑动增加亮度
+        ++brightness_level;
+        if(brightness_level > 100) brightness_level = 100;
+    } else if(slide_direction(touch_x, touch_y) == SLIDE_DOWN) {
+        // 向下滑动减少亮度
+        --brightness_level;
+        if(brightness_level < 1) brightness_level = 1;
+    }
+        
+    sprintf(brightness_percent, "%d", brightness_level);
+    
+    // 计算亮度[0..100]转换到[0..max_brightness_level]
+    return (int)(brightness_level * max_brightness_level / 100);
+}
+
+// 设置亮度
+//SDL_SetWindowBrightness(window, value) not support android
+static void set_brightness_level(int brightness) {
+    is_changing_brightness = true;
+
+#ifdef __ANDROID__
+    // 调用Android JNI方法设置亮度
+    SDL_AndroidSetBrightness(brightness);
+#else
+    // 调用SDL2方法设置亮度
+    if(SDL_SetWindowBrightness(window, brightness) < 0) {
+        LOGE(program_name, "%s\n", SDL_GetError());
+    }
+#endif
+}
+
+// 计算音量
+static int calcu_volume_level(float touch_x, float touch_y){
+    // 当volume_level为-1时，才调用SDL_AndroidGetVolume()方法，保证这个方法只会调用一次
+    // volume_level为全局变量，保存了当前的音量值
+    if(volume_level == -1) {
+        // 音量转换为[0..100]
+        volume_level = (int)(SDL_AndroidGetVolume() * 100 / max_volume_level);
+    }
+        
+    if(slide_direction(touch_x, touch_y) == SLIDE_UP) {
+        // 向上滑动增加音量
+        ++volume_level;
+        if(volume_level > 100) 
+            volume_level = 100;
+    } else if(slide_direction(touch_x, touch_y) == SLIDE_DOWN) {
+        // 向下滑动减少音量
+        --volume_level;
+        if(volume_level < 0) 
+            volume_level = 0;
+    }
+    
+    sprintf(volume_percent, "%d", volume_level);
+    // 计算音量[0..100]转换到[0..max_volume_level]
+    return volume_level * max_volume_level / 100;
+}
 
 // 设置音量
-static void set_volume_level(VideoState *stream, float touch_x, float touch_y) {
-    if(touch_x > screen_width / 2 && touch_x <= screen_width) {
-        is_volume_changed = true;
-        //int volume_level = av_clip(stream->audio_volume, 0, 100);
+static void set_volume_level(VideoState *stream, int volume) {
+    is_changing_volume = true;
+    //int volume_level = av_clip(stream->audio_volume, 0, 100);
 
-        // 当volume_level为-1时，才调用SDL_AndroidGetVolume()方法，保证这个方法只会调用一次
-        // volume_level为全局变量，保存了当前的音量值
-        if(volume_level == -1) {
-            // 音量转换为[0..100]
-            volume_level = (int)(SDL_AndroidGetVolume() * 100 / max_volume_level);
-        }
-        
-        if(slide_direction(touch_x, touch_y) == SLIDE_UP) {
-            // 向上滑动增加音量
-            ++volume_level;
-            if(volume_level > 100) 
-                volume_level = 100;
-        } else if(slide_direction(touch_x, touch_y) == SLIDE_DOWN) {
-            // 向下滑动减少音量
-            --volume_level;
-            if(volume_level < 0) 
-                volume_level = 0;
-        }
-        
-        // 计算音量[0..100]转换到[0..max_volume_level]
-        int volume = volume_level * max_volume_level / 100;
-        
-        // stream->audio_volume为音频音量，不是系统音量
-        // 比如当前系统音量为50，那么audio_volume音量的范围就为[0..50]
-        // 也就是说audio_volume的最大值，为当前的系统音量
-        if(stream->audio_volume != startup_volume)
-            stream->audio_volume = volume;
-
-        sprintf(volume_percent, "%d", volume_level);
-        
-        SDL_AndroidSetVolume(volume);     
-    }
+    // stream->audio_volume为音频音量，不是系统音量
+    // 比如当前系统音量为50，那么audio_volume音量的范围就为[0..50]
+    // 也就是说audio_volume的最大值，为当前的系统音量
+    if(stream->audio_volume != startup_volume)
+        stream->audio_volume = volume;
+    // 调用Android JNI方法设置亮度
+    SDL_AndroidSetVolume(volume);
 }
 
 
 // 计算当前进度百分比值
 static void calcu_progress_percent(float touch_x, float touch_y, double *frac) {
-    // 拖动进度条
-    if(touch_x >= start_x - 20 && touch_x <= end_x + 20
-            && touch_y >= start_y - 80 && touch_y <= end_y + 80) {
-        is_seek_progress = true;
-        is_play_finished = false;
+    is_seeking_progress = true;
+    is_play_finished = false;
 
-        curr_end_x = touch_x;
-        if(curr_end_x < start_x)
-            curr_end_x = start_x;
-        else if(curr_end_x > end_x)
-            curr_end_x = end_x;
+    curr_end_x = touch_x;
+    if(curr_end_x < start_x)
+        curr_end_x = start_x;
+    else if(curr_end_x > end_x)
+        curr_end_x = end_x;
 
-        *frac = ((curr_end_x - start_x)  / (end_x - start_x));
-        set_current_duration((*frac) * total_time);
-    }
+    *frac = ((curr_end_x - start_x)  / (end_x - start_x));
+    set_current_duration((*frac) * total_time);
 }
 
 
-//typedef struct paramter {
+//typedef struct stream_params {
 //    VideoState *stream;
 //    double frac;
-//} paramter;
+//} params_t;
 
 
 //static void seek_stream(void *data){
-//    struct paramter *params = (struct paramter*)data;
+//    params_t *params = (params_t*)data;
 //
 //    int64_t ts = params->frac * params->stream->ic->duration;
 //    if (params->stream->ic->start_time != AV_NOPTS_VALUE)
@@ -3659,35 +3676,40 @@ static void event_loop(VideoState *cur_stream) {
             old_x = touch_x;
             old_y = touch_y;
             
-            // 计算当前进度值
-            calcu_progress_percent(touch_x, touch_y, &frac);
+            if(touch_position(touch_x, touch_y) == IS_PROGRESS){
+                // 计算当前进度值
+                calcu_progress_percent(touch_x, touch_y, &frac);
+            }
             break;
         case SDL_FINGERMOTION: // 触摸移动
             touch_x = event.tfinger.x * screen_width;
             touch_y = event.tfinger.y * screen_height;
-            // 计算当前进度值
-            if(!is_brightness_changed && !is_volume_changed) {
-                calcu_progress_percent(touch_x, touch_y, &frac);
-            }
-
-            // 没有拖动进度条，才允许改变亮度和音量
-            if(!is_seek_progress) {
-                // 设置屏幕亮度
-                set_brightness_level(touch_x, touch_y);
-                // 设置音量
-                set_volume_level(cur_stream, touch_x, touch_y);
-            }
             
+            if(touch_position(touch_x, touch_y) == IS_PROGRESS){
+                // 计算当前进度值
+                calcu_progress_percent(touch_x, touch_y, &frac);
+            } else if(touch_position(touch_x, touch_y) == IS_SCREEN_LEFT) {
+                int brightness = calcu_brightness_level(touch_x, touch_y);
+                // 设置亮度
+                set_brightness_level(brightness);
+            } else if(touch_position(touch_x, touch_y) == IS_SCREEN_RIGHT) {
+                int volume = calcu_volume_level(touch_x, touch_y);
+                // 设置音量
+                set_volume_level(cur_stream, volume);
+            } 
+
             if(cur_stream->paused) {
                 // 暂停之后，当滑动屏幕时可以继续绘制
                 video_display(cur_stream);
             }
             break;
         case SDL_FINGERUP: // 触摸抬起
-
-            if(is_seek_progress) {
+            touch_x = event.tfinger.x * screen_width;
+            touch_y = event.tfinger.y * screen_height;
+            
+            if(touch_position(touch_x, touch_y) == IS_PROGRESS) {
                 // 创建线程进行seek, 因为在触摸滑动(SDL_FINGERMOTION)中进行seek操作会卡帧
-                //struct paramter params = {cur_stream, frac};
+                //params_t params = {cur_stream, frac};
                 //seek_thread = SDL_CreateThread(seek_stream, "seek thread", (void*)&params);
 
                 int64_t ts = frac * cur_stream->ic->duration;
@@ -3696,11 +3718,10 @@ static void event_loop(VideoState *cur_stream) {
                 stream_seek(cur_stream, ts, 0, 0);
             }
             
-            //toggle_full_screen(cur_stream);
-            //cur_stream->force_refresh = 1;
-            is_seek_progress = false;
-            is_volume_changed = false;
-            is_brightness_changed = false;
+            is_seeking_progress = false;
+            is_changing_volume = false;
+            is_changing_brightness = false;
+            
             if(cur_stream->paused) {
                 // 暂停之后，当滑动屏幕时可以继续绘制
                 video_display(cur_stream);
