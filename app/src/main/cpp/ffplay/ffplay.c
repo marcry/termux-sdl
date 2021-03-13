@@ -1460,7 +1460,6 @@ static void draw_text(SDL_Renderer *renderer, SDL_Surface *surface, const char *
     SDL_RenderCopy(renderer, texture, NULL, &text_rect);
 
     SDL_DestroyTexture(texture);
-
 }
 
 // 绘制函数
@@ -1473,7 +1472,7 @@ static void draw(SDL_Renderer *renderer) {
     // surface->h 文本高度
     SDL_Surface *surface = measure(curr_duration);
     
-    // 绘制左边文本(当前时间)
+    // 绘制左边文本(当前时长)
     text_x = 10;
     text_y = screen_height - 200;
     draw_text(renderer, surface, curr_duration, text_x, text_y);
@@ -1482,7 +1481,7 @@ static void draw(SDL_Renderer *renderer) {
     bar_start_x = text_x + surface->w + 30;
     start_y = text_y + surface->h / 2;
 
-    // 绘制右边文本(总共时间)
+    // 绘制右边文本(总共时长)
     surface = measure(total_duration);
     text_x = screen_width - surface->w - 10;
     text_y = screen_height - 200;
