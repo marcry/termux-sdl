@@ -1329,9 +1329,9 @@ bool is_changing_brightness = false;
 const char *font_path = "/system/fonts/DroidSans.ttf";
 
 // 进度条坐标
-int bar_start_x, start_y;
-int bar_end_x, end_y;
-float curr_bar_start_x, curr_bar_end_x;
+int bar_start_x, bar_start_y;
+int bar_end_x, bar_end_y;
+float curr_bar_x, curr_bar_y;
 
 int line_width = 8;
 float progress = 0;
@@ -1389,18 +1389,18 @@ static void set_total_duration(int seconds) {
 // 绘制进度条
 static void draw_progress(SDL_Renderer *renderer) {
     // 绘制进度条线
-    lineColor(renderer, bar_start_x, start_y, bar_end_x, end_y, 0xFFFFFFFF);
-    // 绘制当前进度 curr_bar_end_x为当前播放进度条 结束的x坐标
+    lineColor(renderer, bar_start_x, bar_start_y, bar_end_x, bar_end_y, 0xFFFFFFFF);
+    // 绘制当前进度 curr_bar_x为当前播放进度条 结束的x坐标
 
-    curr_bar_end_x = bar_start_x + (bar_end_x - bar_start_x) * progress / 100;
-    if(curr_bar_end_x > bar_end_x)
-        curr_bar_end_x = bar_end_x;
-    thickLineRGBA(renderer, bar_start_x, start_y,
-                  curr_bar_end_x, end_y, line_width,
+    curr_bar_x = bar_start_x + (bar_end_x - bar_start_x) * progress / 100;
+    if(curr_bar_x > bar_end_x)
+        curr_bar_x = bar_end_x;
+    thickLineRGBA(renderer, bar_start_x, bar_start_y,
+                  curr_bar_x, bar_end_y, line_width,
                   0x66, 0xba, 0xff, 0xff);
 
     // 绘制进度条小圆
-    filledCircleRGBA(renderer, curr_bar_end_x, end_y, line_width * 2,
+    filledCircleRGBA(renderer, curr_bar_x, bar_end_y, line_width * 2,
                      0x66, 0xba, 0xff, 0xff);
 }
 
@@ -1479,7 +1479,7 @@ static void draw(SDL_Renderer *renderer) {
 
     // 在绘制左边的文本时，设置进度条开始坐标
     bar_start_x = text_x + surface->w + 30;
-    start_y = text_y + surface->h / 2;
+    bar_start_y = text_y + surface->h / 2;
 
     // 绘制右边文本(总共时长)
     surface = measure(total_duration);
@@ -1489,7 +1489,7 @@ static void draw(SDL_Renderer *renderer) {
 
     // 在绘制右边的文本时，设置进度条结束坐标
     bar_end_x = text_x - 30;
-    end_y = text_y + surface->h / 2;
+    bar_end_y = text_y + surface->h / 2;
 
     // 显示当前的音量或者亮度值
     if(is_changing_volume || is_changing_brightness) {
@@ -3504,57 +3504,58 @@ enum slide_action {
 };
 
 // 触摸位置
-enum touch_action {
+enum finger_action {
     IS_PROGRESS, IS_SCREEN_LEFT, IS_SCREEN_RIGHT
 };
 
-float old_x, old_y;
 int volume_level = -1;
 int max_volume_level = 0;
 int brightness_level = -1;
 int max_brightness_level = 0;
-// 设置临界值为3
-int critical_value = 3;
+// 设置临界值
+float critical_value = 1.5f;
 
 // 判断在屏幕上滑动的方向
-static int slide_direction(float touch_x, float touch_y) {
+static int slide_direction(float dx, float dy) {
     
-    if(touch_y < old_y && fabsf(touch_y - old_y) >= critical_value) { 
-        // 向上滑动
-        old_y = touch_y;
-        return SLIDE_UP;
-    } else if(touch_y > old_y && fabsf(touch_y - old_y) >= critical_value) {
-        // 向下滑动
-        old_y = touch_y;
-        return SLIDE_DOWN;
-    } else if(touch_x < old_x && fabsf(touch_x - old_x) >= critical_value) {
-        // 向左滑动
-        old_x = touch_x;
-        return SLIDE_LEFT;
-    } else if(touch_x > old_x && fabsf(touch_x - old_x) >= critical_value) {
-        // 向右滑动
-        old_x = touch_x;
-        return SLIDE_RIGHT;
+    if(fabsf(dy) > fabsf(dx)) {
+        // 垂直方向
+        if(dy < 0 && fabsf(dy) >= critical_value) {
+            // 向上滑动
+            return SLIDE_UP;
+        } else if(dy > 0 && fabsf(dy) >= critical_value) {
+            // 向下滑动
+            return SLIDE_DOWN;
+        }
+    } else {
+        // 水平方向
+        if(dx < 0 && fabsf(dx) >= critical_value) {
+            // 向左滑动
+            return SLIDE_LEFT;
+        } else if(dx > 0 && fabsf(dx) >= critical_value) {
+            // 向右滑动
+            return SLIDE_RIGHT;
+        }
     }
 }
 
 // 判断在屏幕上触摸的位置
-static int touch_position(float touch_x, float touch_y) {
-    if(touch_x >= bar_start_x - 20 && touch_x <= bar_end_x + 20
-            && touch_y >= start_y - 80 && touch_y <= end_y + 80) {
+static int finger_position(float finger_x, float finger_y) {
+    if(finger_x >= bar_start_x - 20 && finger_x <= bar_end_x + 20
+            && finger_y >= bar_start_y - 80 && finger_y <= bar_end_y + 80) {
         // 进度条
         return IS_PROGRESS;
-    } else if(touch_x >= 0 && touch_x < screen_width / 2) {
+    } else if(finger_x >= 0 && finger_x < screen_width / 2) {
         // 屏幕左侧
         return IS_SCREEN_LEFT;
-    } else if(touch_x > screen_width / 2 && touch_x <= screen_width) {
+    } else if(finger_x > screen_width / 2 && finger_x <= screen_width) {
         // 屏幕右侧
         return IS_SCREEN_RIGHT;
     }
 }
 
 // 计算亮度
-static int calcu_brightness_level(float touch_x, float touch_y){
+static int calcu_brightness_level(float dx, float dy){
 #ifdef __ANDROID__
     if(brightness_level == -1){
         // 亮度转换为[0..100]
@@ -3564,15 +3565,15 @@ static int calcu_brightness_level(float touch_x, float touch_y){
     brightness_level = SDL_GetWindowBrightness(window);
 #endif
 
-    if(slide_direction(touch_x, touch_y) == SLIDE_UP) {
+    if(slide_direction(dx, dy) == SLIDE_UP) {
         // 向上滑动增加亮度
         ++brightness_level;
         if(brightness_level > 100) brightness_level = 100;
-    } else if(slide_direction(touch_x, touch_y) == SLIDE_DOWN) {
+    } else if(slide_direction(dx, dy) == SLIDE_DOWN) {
         // 向下滑动减少亮度
         --brightness_level;
         if(brightness_level < 1) brightness_level = 1;
-    }
+    } 
         
     sprintf(brightness_percent, "%d", brightness_level);
     
@@ -3597,7 +3598,7 @@ static void set_brightness_level(int brightness) {
 }
 
 // 计算音量
-static int calcu_volume_level(float touch_x, float touch_y){
+static int calcu_volume_level(float dx, float dy){
     // 当volume_level为-1时，才调用SDL_AndroidGetVolume()方法，保证这个方法只会调用一次
     // volume_level为全局变量，保存了当前的音量值
     if(volume_level == -1) {
@@ -3605,12 +3606,12 @@ static int calcu_volume_level(float touch_x, float touch_y){
         volume_level = (int)(SDL_AndroidGetVolume() * 100 / max_volume_level);
     }
         
-    if(slide_direction(touch_x, touch_y) == SLIDE_UP) {
+    if(slide_direction(dx, dy) == SLIDE_UP) {
         // 向上滑动增加音量
         ++volume_level;
         if(volume_level > 100) 
             volume_level = 100;
-    } else if(slide_direction(touch_x, touch_y) == SLIDE_DOWN) {
+    } else if(slide_direction(dx, dy) == SLIDE_DOWN) {
         // 向下滑动减少音量
         --volume_level;
         if(volume_level < 0) 
@@ -3638,20 +3639,36 @@ static void set_volume_level(VideoState *stream, int volume) {
 
 
 // 计算当前进度百分比值
-static void calcu_progress_percent(float touch_x, float touch_y, double *frac) {
+static void calcu_progress_percent(float finger_x, float finger_y, double *frac) {
     is_seeking_progress = true;
     is_play_finished = false;
 
-    curr_bar_end_x = touch_x;
-    if(curr_bar_end_x < bar_start_x)
-        curr_bar_end_x = bar_start_x;
-    else if(curr_bar_end_x > bar_end_x)
-        curr_bar_end_x = bar_end_x;
+    curr_bar_x = finger_x;
+    if(curr_bar_x < bar_start_x)
+        curr_bar_x = bar_start_x;
+    else if(curr_bar_x > bar_end_x)
+        curr_bar_x = bar_end_x;
 
-    *frac = ((curr_bar_end_x - bar_start_x)  / (bar_end_x - bar_start_x));
+    *frac = ((curr_bar_x - bar_start_x)  / (bar_end_x - bar_start_x));
     set_current_duration((*frac) * total_time);
 }
 
+// 计算seek值
+static int calcu_seek_interval(dx, dy) {
+    float interval = 0.0f;
+    
+    if(dx < 0) {
+        interval = dx;
+        if(interval < -critical_value) 
+            interval = -critical_value;
+    } else {
+        interval = dx;
+        if(interval > critical_value) 
+            interval = critical_value;
+    }
+    
+    return interval;
+}
 
 //typedef struct stream_params {
 //    VideoState *stream;
@@ -3674,7 +3691,7 @@ static void calcu_progress_percent(float touch_x, float touch_y, double *frac) {
 static void event_loop(VideoState *cur_stream) {
     SDL_Event event;
     double incr, pos, frac;
-    float touch_x, touch_y;
+    float finger_x, finger_y;
     Uint32 curr_timestamp = 0;
     Uint32 last_timestamp = 0;
     //SDL_Thread *seek_thread = NULL;
@@ -3684,43 +3701,60 @@ static void event_loop(VideoState *cur_stream) {
         refresh_loop_wait_event(cur_stream, &event);
         switch(event.type) {
         case SDL_FINGERDOWN: // 触摸按下
-            touch_x = event.tfinger.x * screen_width;
-            touch_y = event.tfinger.y * screen_height;
-            old_x = touch_x;
-            old_y = touch_y;
-            
-            if(touch_position(touch_x, touch_y) == IS_PROGRESS){
+            finger_x = event.tfinger.x * screen_width;
+            finger_y = event.tfinger.y * screen_height;
+           
+            if(finger_position(finger_x, finger_y) == IS_PROGRESS){
                 // 计算当前进度值
-                calcu_progress_percent(touch_x, touch_y, &frac);
+                calcu_progress_percent(finger_x, finger_y, &frac);
             }
             break;
         case SDL_FINGERMOTION: // 触摸移动
-            touch_x = event.tfinger.x * screen_width;
-            touch_y = event.tfinger.y * screen_height;
+            finger_x = event.tfinger.x * screen_width;
+            finger_y = event.tfinger.y * screen_height;
             
-            if(touch_position(touch_x, touch_y) == IS_PROGRESS){
+            float dx = event.tfinger.dx * screen_width;
+            float dy = event.tfinger.dy * screen_height;
+            
+            if(finger_position(finger_x, finger_y) == IS_PROGRESS){
                 // 计算当前进度值
-                calcu_progress_percent(touch_x, touch_y, &frac);
-            } else if(touch_position(touch_x, touch_y) == IS_SCREEN_LEFT) {
-                int brightness = calcu_brightness_level(touch_x, touch_y);
-                // 设置亮度
-                set_brightness_level(brightness);
-            } else if(touch_position(touch_x, touch_y) == IS_SCREEN_RIGHT) {
-                int volume = calcu_volume_level(touch_x, touch_y);
-                // 设置音量
-                set_volume_level(cur_stream, volume);
+                calcu_progress_percent(finger_x, finger_y, &frac);
+                
+            } else if(finger_position(finger_x, finger_y) == IS_SCREEN_LEFT) {
+               
+                if(slide_direction(dx, dy) == SLIDE_UP || slide_direction(dx, dy) == SLIDE_DOWN) {
+                    // 设置亮度
+                    int brightness = calcu_brightness_level(dx, dy);
+                    set_brightness_level(brightness);
+                } else if(slide_direction(dx, dy) == SLIDE_LEFT || slide_direction(dx, dy) == SLIDE_RIGHT) {
+                    // 滑动屏幕进行seek
+                    incr = calcu_seek_interval(dx, dy);
+                    goto do_seek;
+                }
+                
+            } else if(finger_position(finger_x, finger_y) == IS_SCREEN_RIGHT) {
+                if(slide_direction(dx, dy) == SLIDE_UP || slide_direction(dx, dy) == SLIDE_DOWN) {
+                    // 设置音量
+                    int volume = calcu_volume_level(dx, dy);
+                    set_volume_level(cur_stream, volume);
+                } else if(slide_direction(dx, dy) == SLIDE_LEFT || slide_direction(dx, dy) == SLIDE_RIGHT) {
+                    // 滑动屏幕进行seek
+                    incr = calcu_seek_interval(dx, dy);
+                    goto do_seek;
+                }
             } 
 
             if(cur_stream->paused) {
                 // 暂停之后，当滑动屏幕时可以继续绘制
                 video_display(cur_stream);
             }
+            
             break;
         case SDL_FINGERUP: // 触摸抬起
-            touch_x = event.tfinger.x * screen_width;
-            touch_y = event.tfinger.y * screen_height;
+            finger_x = event.tfinger.x * screen_width;
+            finger_y = event.tfinger.y * screen_height;
             
-            if(touch_position(touch_x, touch_y) == IS_PROGRESS) {
+            if(finger_position(finger_x, finger_y) == IS_PROGRESS) {
                 // 创建线程进行seek, 因为在触摸滑动(SDL_FINGERMOTION)中进行seek操作会卡帧
                 //params_t params = {cur_stream, frac};
                 //seek_thread = SDL_CreateThread(seek_stream, "seek thread", (void*)&params);
