@@ -351,15 +351,17 @@ static const char *video_codec_name;
 double rdftspeed = 0.02;
 static int64_t cursor_last_shown;
 static int cursor_hidden = 0;
+
 #if CONFIG_AVFILTER
 static const char **vfilters_list = NULL;
 static int nb_vfilters = 0;
 static char *afilters = NULL;
 static char vfilters[20] = {""};
 // playback speed
-static float af_speed = 0.0f;
-static float vf_speed = 0.0f;
+static float af_speed = 1.0f;
+static float vf_speed = 1.0f;
 #endif
+
 static int autorotate = 1;
 static int find_stream_info = 1;
 static int filter_nbthreads = 0;
@@ -433,7 +435,7 @@ static int opt_add_vfilter(void *optctx, const char *opt, const char *arg) {
     if(arg != NULL && strcmp(vfilters, "") == 0) {
         strncpy(vfilters, arg, strlen(arg));
         if(strstr(vfilters, "setpts") != NULL) {
-            float vf_pts = 0;
+            float vf_pts = 1.0f;
             sscanf(/*vfilters*/arg, "setpts=%f*PTS", &vf_pts);
             vf_speed = 1.0f / vf_pts;
             //LOGI(program_name, "vf_speed = %f\n", vf_speed);
@@ -1308,22 +1310,25 @@ static void stream_close(VideoState *is) {
 TTF_Font *font = NULL;
 SDL_Color text_color = { 0xff, 0xff, 0xff, 0};
 SDL_Rect text_rect;
+
+// 设置字体大小
 int font_size = 45;
 int default_font_size = 45;
 
-char total_duration[10];
-char current_duration[10];
-
+// 显示音量 亮度文本
 char volume_percent[5];
 char brightness_percent[5];
 
+// 显示暂停文本
 char paused_text[8];
 
-int curr_time, total_time;
-float playback_speed = 1.0f;
-// 播放完成标志
-bool is_play_finished = false;
+// 媒体文件当前时长 总时长
+int curr_duration, total_duration;
 
+// 播放速度
+float playback_speed = 1.0f;
+
+// 默认字体
 const char *font_path = "/system/fonts/DroidSans.ttf";
 
 // 进度条坐标
@@ -1331,6 +1336,7 @@ int bar_start_x, bar_start_y;
 int bar_end_x, bar_end_y;
 float curr_bar_x, curr_bar_y;
 
+// 进度条宽度
 int line_width = 8;
 float progress = 0;
 // 拖动进度条标志
@@ -1338,50 +1344,55 @@ bool is_seeking_progress = false;
 
 
 // 格式化时间
-static void format_time(int seconds, char *time) {
+static void format_time(int seconds, char *fmt_time) {
 
     int hh = seconds / 3600;
     int mm = (seconds % 3600) / 60;
     int ss = seconds % 60;
-
+    
+    if(fmt_time != NULL) 
+        memset(fmt_time, 0, strlen(fmt_time));
+    
     if(hh > 0) {
-        sprintf(time, "%02d:%02d:%02d", hh, mm, ss);
+        sprintf(fmt_time, "%02d:%02d:%02d", hh, mm, ss);
     } else {
-        sprintf(time, "%02d:%02d", mm, ss);
+        sprintf(fmt_time, "%02d:%02d", mm, ss);
     }
 }
 
 // 获取播放速度，用于设置时间速度
 static void set_playback_speed() {
 
-    if(vf_speed != 0 && af_speed != 0) {
+    if(vf_speed != 1.0f && af_speed != 1.0f) {
         playback_speed = vf_speed >= af_speed ? vf_speed : af_speed;
     } else {
 
-        if(vf_speed != 0)
+        if(vf_speed != 1.0f)
             playback_speed = vf_speed;
-        else if(af_speed != 0)
+        else if(af_speed != 1.0f)
             playback_speed = af_speed;
+        else
+            playback_speed = 1.0f;
     }
 }
 
 // 设置当前时长
-static void set_current_duration(int seconds) {
+static void set_current_duration(int duration) {
+    curr_duration = duration;
+    
     // 当前显示的时间 = 时间 * 播放速度
-    if(seconds > total_time)
-        seconds = total_time;
-    format_time(seconds, current_duration);
+    if(curr_duration >= total_duration)
+        curr_duration = total_duration;
+        
     // 计算当前进度值百分比
-    curr_time = seconds;
-    progress = (curr_time * 100) / total_time;
+    progress = (curr_duration * 100) / total_duration;
 }
 
 // 设置总共的时长
-static void set_total_duration(int seconds) {
+static void set_total_duration(int duration) {
 
     //int tns  = is->ic->duration / 1000000LL;
-    total_time = seconds;
-    format_time(seconds, total_duration);
+    total_duration = duration;
 }
 
 // 绘制进度条
@@ -1499,22 +1510,25 @@ static void draw(SDL_Renderer *renderer) {
     // 绘制文本之前首先测量文本尺寸，用于计算文本坐标
     // surface->w 文本宽度
     // surface->h 文本高度
-    SDL_Surface *surface = measure(current_duration);
+    char duration_text[10];
+    format_time(curr_duration, duration_text);
+    SDL_Surface *surface = measure(duration_text);
     
     // 绘制左边文本(当前时长)
     text_x = 10;
     text_y = screen_height - 200;
-    draw_text(renderer, surface, current_duration, text_x, text_y);
+    draw_text(renderer, surface, duration_text, text_x, text_y);
 
     // 在绘制左边的文本时，设置进度条开始坐标
     bar_start_x = text_x + surface->w + 30;
     bar_start_y = text_y + surface->h / 2;
 
     // 绘制右边文本(总共时长)
-    surface = measure(total_duration);
+    format_time(total_duration, duration_text);
+    surface = measure(duration_text);
     text_x = screen_width - surface->w - 10;
     text_y = screen_height - 200;
-    draw_text(renderer, surface, total_duration, text_x, text_y);
+    draw_text(renderer, surface, duration_text, text_x, text_y);
 
     // 在绘制右边的文本时，设置进度条结束坐标
     bar_end_x = text_x - 30;
@@ -3258,12 +3272,11 @@ static int read_thread(void *arg) {
 
             // 播放完成
             progress = 100;
-            strcpy(current_duration, total_duration);
-
+            curr_duration = total_duration;
+            
             if(loop != 1 && (!loop || --loop)) {
                 // 循环播放，重新设置进度和时间
-                progress = 0;
-                strcpy(current_duration, "00:00");
+                progress = curr_duration = 0;
                 stream_seek(is, start_time != AV_NOPTS_VALUE ? start_time : 0, 0, 0);
             } else if(autoexit) {
                 ret = AVERROR_EOF;
@@ -3540,9 +3553,9 @@ float critical_value = 1.5f;
 // 按下屏幕时的开始坐标
 float start_x, start_y;
 
+// 滑动标志
 bool is_slide_vertical = false;
-bool is_silde_horizotal = false;
-
+bool is_slide_horizontal = false;
 
 // 计算角度，判断滑动方向
 static float calcu_slide_angle(float finger_x, float finger_y) {
@@ -3563,7 +3576,7 @@ static float calcu_slide_angle(float finger_x, float finger_y) {
 static int slide_direction(float finger_x, float finger_y, float dx, float dy) {
     
     if((fabsf(dy) > fabsf(dx) || fabsf(finger_y - start_y) >= fabsf(finger_x - start_x))
-        && !is_silde_horizotal) {
+        && !is_slide_horizontal) {
         // 垂直方向
         is_slide_vertical = true;
         if(dy < 0 && fabsf(dy) >= critical_value) {
@@ -3576,7 +3589,7 @@ static int slide_direction(float finger_x, float finger_y, float dx, float dy) {
     } else if((fabsf(dx) > fabsf(dy) || fabsf(finger_x - start_x) >= fabsf(finger_y - start_y))
         && !is_slide_vertical){
         // 水平方向
-        is_silde_horizotal = true;
+        is_slide_horizontal = true;
         if(dx < 0 && fabsf(dx) >= critical_value) {
             // 向左滑动
             return SLIDE_LEFT;
@@ -3618,11 +3631,13 @@ static int calcu_brightness_level(float finger_x, float finger_y, float dx, floa
     brightness_level = SDL_GetWindowBrightness(window);
 #endif
 
-    if(slide_direction(finger_x, finger_y, dx, dy) == SLIDE_UP) {
+    int direction = slide_direction(finger_x, finger_y, dx, dy);
+    
+    if(direction == SLIDE_UP) {
         // 向上滑动增加亮度
         ++brightness_level;
         if(brightness_level > 100) brightness_level = 100;
-    } else if(slide_direction(finger_x, finger_y, dx, dy) == SLIDE_DOWN) {
+    } else if(direction == SLIDE_DOWN) {
         // 向下滑动减少亮度
         --brightness_level;
         if(brightness_level < 1) brightness_level = 1;
@@ -3658,13 +3673,15 @@ static int calcu_volume_level(float finger_x, float finger_y, float dx, float dy
         // 音量转换为[0..100]
         volume_level = (int)(volume_level * 100 / max_volume_level);
     }
-        
-    if(slide_direction(finger_x, finger_y, dx, dy) == SLIDE_UP) {
+    
+    int direction = slide_direction(finger_x, finger_y, dx, dy);
+    
+    if(direction == SLIDE_UP) {
         // 向上滑动增加音量
         ++volume_level;
         if(volume_level > 100) 
             volume_level = 100;
-    } else if(slide_direction(finger_x, finger_y, dx, dy) == SLIDE_DOWN) {
+    } else if(direction == SLIDE_DOWN) {
         // 向下滑动减少音量
         --volume_level;
         if(volume_level < 0) 
@@ -3788,7 +3805,12 @@ static void event_loop(VideoState *cur_stream) {
                 is_seeking_progress = true;
                 // 计算当前进度值
                 frac = calcu_progress_percent(finger_x, finger_y);
-                set_current_duration(frac * total_time);
+                set_current_duration(frac * total_duration);
+                // 播放完成后，拖动进度条可以继续进行绘制
+                if((!cur_stream->audio_st || (cur_stream->auddec.finished == cur_stream->audioq.serial && frame_queue_nb_remaining(&cur_stream->sampq) == 0)) 
+                    && (!cur_stream->video_st || (cur_stream->viddec.finished == cur_stream->videoq.serial && frame_queue_nb_remaining(&cur_stream->pictq) == 0))) {
+                    goto refresh;
+                }
             }
             
             break;
@@ -3803,7 +3825,7 @@ static void event_loop(VideoState *cur_stream) {
                 is_seeking_progress = true;
                 // 计算当前进度值
                 frac = calcu_progress_percent(finger_x, finger_y);
-                set_current_duration(frac * total_time);
+                set_current_duration(frac * total_duration);
                 
                 // 播放完成后，拖动进度条可以继续进行绘制
                 // video_display在视频暂停或者播放完成后，不会再继续调用
@@ -3815,7 +3837,7 @@ static void event_loop(VideoState *cur_stream) {
                 
             } else if(finger_position(finger_x, finger_y) == IS_SCREEN_LEFT) {
                
-                slide_direction(finger_x, finger_y, dx, dy);
+                int direction = slide_direction(finger_x, finger_y, dx, dy);
                
                 if(is_slide_vertical) {
                     // 设置亮度
@@ -3823,7 +3845,7 @@ static void event_loop(VideoState *cur_stream) {
                     int brightness = calcu_brightness_level(finger_x, finger_y, dx, dy);
                     set_brightness_level(brightness);
                     
-                } else if(is_silde_horizotal) {
+                } else if(is_slide_horizontal) {
                     // 滑动屏幕进行seek
                     incr = calcu_seek_interval(dx, dy);
                     goto do_seek;
@@ -3831,7 +3853,7 @@ static void event_loop(VideoState *cur_stream) {
                 
             } else if(finger_position(finger_x, finger_y) == IS_SCREEN_RIGHT) {
                 
-                slide_direction(finger_x, finger_y, dx, dy);
+                int direction = slide_direction(finger_x, finger_y, dx, dy);
                 
                 if(is_slide_vertical) {
                     // 设置音量
@@ -3839,7 +3861,7 @@ static void event_loop(VideoState *cur_stream) {
                     int volume = calcu_volume_level(finger_x, finger_y, dx, dy);
                     set_volume_level(cur_stream, volume);
                     
-                } else if (is_silde_horizotal) {
+                } else if (is_slide_horizontal) {
                     // 滑动屏幕进行seek
                     incr = calcu_seek_interval(dx, dy);
                     goto do_seek;
@@ -3871,9 +3893,8 @@ static void event_loop(VideoState *cur_stream) {
             
             // 重置所有状态标志
             is_seeking_progress = false;
-            
             is_slide_vertical = false;
-            is_silde_horizotal = false;
+            is_slide_horizontal = false;
             
             // 暂停之后，当滑动屏幕时可以继续进行绘制
             if(cur_stream->paused) 
