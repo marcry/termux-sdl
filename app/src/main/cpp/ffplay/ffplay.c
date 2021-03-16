@@ -3894,7 +3894,7 @@ static void event_loop(VideoState *cur_stream) {
             float dx = event.tfinger.dx * screen_width;
             float dy = event.tfinger.dy * screen_height;
             
-            if(finger_position(finger_x, finger_y) == IS_PROGRESS){
+            if(finger_position(finger_x, finger_y) == IS_PROGRESS) { // 当前滑动的位置是进度条
                 is_seeking_progress = true;
                 // 计算当前进度值
                 frac = calcu_progress_percent(finger_x, finger_y);
@@ -3908,33 +3908,33 @@ static void event_loop(VideoState *cur_stream) {
                     goto refresh;
                 }
                 
-            } else if(finger_position(finger_x, finger_y) == IS_SCREEN_LEFT) {
+            } else if(finger_position(finger_x, finger_y) == IS_SCREEN_LEFT) { // 当前滑动的位置是屏幕左侧
                
                 int direction = slide_direction(finger_x, finger_y, dx, dy);
                
-                if(is_slide_vertical) {
+                if(is_slide_vertical) { // 垂直方向滑动
                     // 设置亮度
                     clear_text(volume_percent);
                     int brightness = calcu_brightness_level(finger_x, finger_y, dx, dy);
                     set_brightness_level(brightness);
                     
-                } else if(is_slide_horizontal) {
+                } else if(is_slide_horizontal) { // 水平方向滑动
                     // 滑动屏幕进行seek
                     incr = calcu_seek_interval(dx, dy);
                     goto do_seek;
                 }
                 
-            } else if(finger_position(finger_x, finger_y) == IS_SCREEN_RIGHT) {
+            } else if(finger_position(finger_x, finger_y) == IS_SCREEN_RIGHT) { // 当前滑动的位置是屏幕右侧
                 
                 int direction = slide_direction(finger_x, finger_y, dx, dy);
                 
-                if(is_slide_vertical) {
+                if(is_slide_vertical) { // 垂直方向滑动
                     // 设置音量
                     clear_text(brightness_percent);
                     int volume = calcu_volume_level(finger_x, finger_y, dx, dy);
                     set_volume_level(cur_stream, volume);
                     
-                } else if (is_slide_horizontal) {
+                } else if (is_slide_horizontal) { // 水平方向滑动
                     // 滑动屏幕进行seek
                     incr = calcu_seek_interval(dx, dy);
                     goto do_seek;
@@ -3977,7 +3977,7 @@ static void event_loop(VideoState *cur_stream) {
             SDL_WaitThread(seek_thread, NULL);
             seek_thread = NULL;
             //SDL_DestroyCond(cond);
-            // 在此处destroy mutex会有视频会卡顿
+            // 在此处销毁mutex，视频会可能会卡帧
             //SDL_DestroyMutex(mutex);
             
             // 清空文本
