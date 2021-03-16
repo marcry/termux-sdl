@@ -1324,7 +1324,7 @@ char paused_text[8];
 
 char seek_pos_text[20];
 
-// 媒体文件当前时长 总时长
+// 媒体文件当前播放时长 总时长
 int curr_duration, total_duration;
 
 // 播放速度
@@ -1341,9 +1341,12 @@ float curr_bar_x, curr_bar_y;
 // 进度条宽度
 int line_width = 8;
 float progress = 0;
+
 // 拖动进度条标志
 bool is_seeking_progress = false;
 
+// 是否显示进度条 按钮等标志
+bool is_show_component = true;
 
 // 格式化时间
 static void format_time(int seconds, char *fmt_time) {
@@ -1403,7 +1406,7 @@ static void draw_progress(SDL_Renderer *renderer) {
     lineColor(renderer, bar_start_x, bar_start_y, bar_end_x, bar_end_y, 0xFFFFFFFF);
     // 绘制当前进度 curr_bar_x为当前播放进度条 结束的x坐标
 
-    curr_bar_x = bar_start_x + (bar_end_x - bar_start_x) * progress / 100;
+    curr_bar_x = bar_start_x + ((bar_end_x - bar_start_x) * progress / 100);
     if(curr_bar_x > bar_end_x)
         curr_bar_x = bar_end_x;
     thickLineRGBA(renderer, bar_start_x, bar_start_y,
@@ -1525,38 +1528,41 @@ static void draw_seek_text(char *seek_text) {
 
 // 绘制函数
 static void draw(SDL_Renderer *renderer) {
-    int text_x = 0;
-    int text_y = 0;
+    // 是否显示进度条 按键等标志
+    if(is_show_component) {
+        int text_x = 0;
+        int text_y = 0;
     
-    // 绘制文本之前首先测量文本尺寸，用于计算文本坐标
-    // surface->w 文本宽度
-    // surface->h 文本高度
-    char duration_text[10];
-    format_time(curr_duration, duration_text);
-    SDL_Surface *surface = measure(duration_text);
+        // 绘制文本之前首先测量文本尺寸，用于计算文本坐标
+        // surface->w 文本宽度
+        // surface->h 文本高度
+        char duration_text[10];
+        format_time(curr_duration, duration_text);
+        SDL_Surface *surface = measure(duration_text);
     
-    // 绘制左边文本(当前时长)
-    text_x = 10;
-    text_y = screen_height - 200;
-    draw_text(renderer, surface, duration_text, text_x, text_y);
+        // 绘制左边文本(当前时长)
+        text_x = 10;
+        text_y = screen_height - 200;
+        draw_text(renderer, surface, duration_text, text_x, text_y);
 
-    // 在绘制左边的文本时，设置进度条开始坐标
-    bar_start_x = text_x + surface->w + 30;
-    bar_start_y = text_y + surface->h / 2;
+        // 在绘制左边的文本时，设置进度条开始坐标
+        bar_start_x = text_x + surface->w + 30;
+        bar_start_y = text_y + surface->h / 2;
 
-    // 绘制右边文本(总共时长)
-    format_time(total_duration, duration_text);
-    surface = measure(duration_text);
-    text_x = screen_width - surface->w - 10;
-    text_y = screen_height - 200;
-    draw_text(renderer, surface, duration_text, text_x, text_y);
+        // 绘制右边文本(总共时长)
+        format_time(total_duration, duration_text);
+        surface = measure(duration_text);
+        text_x = screen_width - surface->w - 10;
+        text_y = screen_height - 200;
+        draw_text(renderer, surface, duration_text, text_x, text_y);
 
-    // 在绘制右边的文本时，设置进度条结束坐标
-    bar_end_x = text_x - 30;
-    bar_end_y = text_y + surface->h / 2;
+        // 在绘制右边的文本时，设置进度条结束坐标
+        bar_end_x = text_x - 30;
+        bar_end_y = text_y + surface->h / 2;
 
-    // 绘制进度条
-    draw_progress(renderer);
+        // 绘制进度条
+        draw_progress(renderer);
+    }
     
     // 绘制音量文本
     if(strcmp(volume_percent, "") != 0) {
@@ -3297,7 +3303,6 @@ static int read_thread(void *arg) {
                 (!is->video_st || (is->viddec.finished == is->videoq.serial && frame_queue_nb_remaining(&is->pictq) == 0))) {
 
             // 播放完成
-            progress = 100;
             curr_duration = total_duration;
             
             if(loop != 1 && (!loop || --loop)) {
@@ -3631,7 +3636,8 @@ static int slide_direction(float finger_x, float finger_y, float dx, float dy) {
 // 判断在屏幕上触摸的位置
 static int finger_position(float finger_x, float finger_y) {
     if(finger_x >= 0 && finger_x <= screen_width
-            && finger_y >= bar_start_y - 100 && finger_y <= bar_end_y + 100) {
+            && finger_y >= bar_start_y - 100 && finger_y <= bar_end_y + 100 
+            && is_show_component) {
         // 进度条
         return IS_PROGRESS;
     } else if(finger_x >= 0 && finger_x < screen_width / 2) {
@@ -3693,7 +3699,7 @@ static void set_brightness_level(int brightness) {
 // 计算音量
 static int calcu_volume_level(float finger_x, float finger_y, float dx, float dy){
     // 当volume_level为-1时，才调用SDL_AndroidGetVolume()方法，保证这个方法只会调用一次
-    // volume_level为全局变量，保存了当前的音量值
+    // volume_level为全局变量，保存了当前的音量值，后续无需再通过SDL_AndroidGetVolume方法获取音量
     if(volume_level == -1) {
         volume_level = SDL_AndroidGetVolume();
         // 音量转换为[0..100]
@@ -3830,9 +3836,11 @@ static int seek_stream(void *data){
         // 设置当前时长
         set_current_duration(pos);
         
-        char total_duration_text[10];           
         format_time(pos, seek_pos_text);
+        
+        char total_duration_text[10];    
         format_time(total_duration, total_duration_text);
+        
         strcat(seek_pos_text, " / ");
         strcat(seek_pos_text, total_duration_text);
         
@@ -3857,8 +3865,8 @@ static void event_loop(VideoState *cur_stream) {
     SDL_Event event;
     double incr, pos, frac;
     float finger_x, finger_y;
-    Uint32 curr_timestamp = 0;
-    Uint32 last_timestamp = 0;
+    Uint32 start_timestamp = 0;
+    Uint32 end_timestamp = 0;
     // SDL定时器
     SDL_TimerID timer;
     // 线程函数参数
@@ -3871,9 +3879,10 @@ static void event_loop(VideoState *cur_stream) {
         refresh_loop_wait_event(cur_stream, &event);
         switch(event.type) {
         case SDL_FINGERDOWN: // 触摸按下
+            start_timestamp = event.tfinger.timestamp;
             start_x = finger_x = event.tfinger.x * screen_width;
             start_y = finger_y = event.tfinger.y * screen_height;
-           
+            
             if(finger_position(finger_x, finger_y) == IS_PROGRESS){
                 is_seeking_progress = true;
                 // 计算当前进度值
@@ -3884,7 +3893,7 @@ static void event_loop(VideoState *cur_stream) {
                     && (!cur_stream->video_st || (cur_stream->viddec.finished == cur_stream->videoq.serial && frame_queue_nb_remaining(&cur_stream->pictq) == 0))) {
                     goto refresh;
                 }
-            }
+            } 
             
             break;
         case SDL_FINGERMOTION: // 触摸移动
@@ -3947,6 +3956,7 @@ static void event_loop(VideoState *cur_stream) {
                 
             break;
         case SDL_FINGERUP: // 触摸抬起
+            end_timestamp = event.tfinger.timestamp;
             finger_x = event.tfinger.x * screen_width;
             finger_y = event.tfinger.y * screen_height;
             
@@ -3959,8 +3969,15 @@ static void event_loop(VideoState *cur_stream) {
                 if(cur_stream->ic->start_time != AV_NOPTS_VALUE)
                     ts += cur_stream->ic->start_time;
                 stream_seek(cur_stream, ts, 0, 0);
-            }
+            } 
             
+            if(strcmp(volume_percent, "") == 0 
+                && strcmp(brightness_percent, "") == 0 
+                && end_timestamp - start_timestamp <= 200 
+                && !is_seeking_progress && !is_slide_vertical && !is_slide_horizontal) {
+                // 改变状态
+                is_show_component = !is_show_component;
+            }
             
             // 重置所有状态标志
             is_seeking_progress = false;
@@ -4158,6 +4175,7 @@ do_seek:
                     // 单击全屏
                     //toggle_full_screen(cur_stream);
                     //cur_stream->force_refresh = 1;
+                    //LOGI(program_name, "one click\n");
                     last_mouse_left_click = av_gettime_relative();
                 }
             }
