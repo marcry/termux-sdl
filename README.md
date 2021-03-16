@@ -46,6 +46,13 @@ ffplay -af atempo=1.5 -i /sdcard/music/hello.flac
 ffplay -af atempo=2.0 -vf setpts=1/2*PTS -i /sdcard/video/test.mp4
 
 # play at any speed: atempo=x setpts=1/x*PTS
+
+# no window title(set title is null)
+ffplay -window_title -i /sdcard/video/test.mp4
+
+# full screen
+ffplay -fs -i /sdcard/video/test.mp4
+
 ```
 
 ----
