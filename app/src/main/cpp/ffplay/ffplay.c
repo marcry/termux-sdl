@@ -1322,6 +1322,8 @@ char brightness_percent[5];
 // 显示暂停文本
 char paused_text[8];
 
+char seek_pos_text[20];
+
 // 媒体文件当前时长 总时长
 int curr_duration, total_duration;
 
@@ -1420,14 +1422,14 @@ static void init_font(const char *font_path, int ptsize) {
     /* Initialize the TTF library */
     if(TTF_Init() < 0) {
         LOGE(program_name, "Init TTF: %s\n", SDL_GetError());
-        return;
+        TTF_Quit();
     }
 
     font = TTF_OpenFont(font_path, ptsize);
 
     if(!font) {
         LOGE(program_name, "Couldn't load TTF: %s\n", SDL_GetError());
-        return;
+        TTF_Quit();
     }
 
     // 文本风格
@@ -1444,6 +1446,7 @@ static SDL_Surface* measure(const char *text) {
     SDL_Surface *surface = TTF_RenderUTF8_Blended(font, text, text_color);
     if(!surface) {
         LOGE(program_name, "Surface: %s\n", SDL_GetError());
+        SDL_Quit();
     }
     
     return surface;
@@ -1456,6 +1459,7 @@ static void draw_text(SDL_Renderer *renderer, SDL_Surface *surface, const char *
     SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
     if(!texture) {
         LOGE(program_name, "Texture: %s\n", SDL_GetError());
+        SDL_Quit();
     }
 
     // 文本绘制坐标
@@ -1501,6 +1505,23 @@ static void draw_paused_text(char *paused) {
     font_size = default_font_size;
     TTF_SetFontSize(font, font_size);
 }
+
+
+// 绘制seek时间文本
+static void draw_seek_text(char *seek_text) {
+    font_size = 115;
+    TTF_SetFontSize(font, font_size);
+    
+    SDL_Surface *surface = measure(seek_text);
+    int text_x = screen_width / 2 - surface->w / 2;
+    int text_y = screen_height / 2 - surface->h / 2; 
+    draw_text(renderer, surface, seek_text, text_x, text_y);
+            
+    // 恢复字体大小
+    font_size = default_font_size;
+    TTF_SetFontSize(font, font_size);
+}
+
 
 // 绘制函数
 static void draw(SDL_Renderer *renderer) {
@@ -1550,6 +1571,11 @@ static void draw(SDL_Renderer *renderer) {
     // 绘制暂停文本
     if(strcmp(paused_text, "") != 0) {
         draw_paused_text(paused_text);
+    }
+    
+    // 绘制seek时间文本
+    if(strcmp(seek_pos_text, "") != 0) {
+        draw_seek_text(seek_pos_text);
     }
 }
 
@@ -3553,7 +3579,7 @@ float critical_value = 1.5f;
 // 按下屏幕时的开始坐标
 float start_x, start_y;
 
-// 滑动标志
+// 滑动方向标志
 bool is_slide_vertical = false;
 bool is_slide_horizontal = false;
 
@@ -3765,21 +3791,64 @@ static Uint32 callback(Uint32 interval, void *param) {
     return 0;
 }
 
+// ================= seek thread ====================
 
-//typedef struct stream_params {
-//    VideoState *stream;
-//    double frac;
-//} params_t;
+SDL_Thread *seek_thread = NULL;
+SDL_mutex *mutex = NULL;
+SDL_cond *cond = NULL;
+SDL_TimerID timer;
 
+bool is_seek_finished = false;
 
-//static void seek_stream(void *data){
-//    params_t *params = (params_t*)data;
-//
-//    int64_t ts = params->frac * params->stream->ic->duration;
-//    if (params->stream->ic->start_time != AV_NOPTS_VALUE)
-//    ts += params->stream->ic->start_time;
-//    stream_seek(params->stream, ts, 0, 0);
-//}
+typedef struct stream_params {
+    VideoState *stream;
+    SDL_Event *event;
+    float incr;
+} stm_params_t;
+
+// 在子线程里进行seek操作
+static int seek_stream(void *data){
+    stm_params_t *params = (stm_params_t*)data;
+    float pos = 0.0f;
+    
+    SDL_LockMutex(mutex);
+    
+    while(!is_seek_finished) {
+        // 等待条件变量
+        SDL_CondWait(cond, mutex);
+        
+        pos = get_master_clock(params->stream);
+                    
+        if(isnan(pos))
+            pos = (double)params->stream->seek_pos / AV_TIME_BASE;
+        pos += params->incr;
+                    
+        if(params->stream->ic->start_time != AV_NOPTS_VALUE && pos < params->stream->ic->start_time / (double)AV_TIME_BASE)
+            pos = params->stream->ic->start_time / (double)AV_TIME_BASE;
+        stream_seek(params->stream, (int64_t)(pos * AV_TIME_BASE), (int64_t)(params->incr * AV_TIME_BASE), 0);
+        
+        // 设置当前时长
+        set_current_duration(pos);
+        
+        char total_duration_text[10];           
+        format_time(pos, seek_pos_text);
+        format_time(total_duration, total_duration_text);
+        strcat(seek_pos_text, " / ");
+        strcat(seek_pos_text, total_duration_text);
+        
+        // 发送刷新事件
+        SDL_Event *event = params->event;
+        event->type = REFRESH_EVENT;
+        SDL_PushEvent(event);
+        
+        //LOGI(program_name, "%s\n", seek_pos_text);
+    }
+    
+    SDL_UnlockMutex(mutex);
+
+    return (int)pos;
+}
+
 
 // ============================================================
 
@@ -3790,9 +3859,13 @@ static void event_loop(VideoState *cur_stream) {
     float finger_x, finger_y;
     Uint32 curr_timestamp = 0;
     Uint32 last_timestamp = 0;
+    // SDL定时器
     SDL_TimerID timer;
-    //SDL_Thread *seek_thread = NULL;
-
+    // 线程函数参数
+    stm_params_t params;
+    mutex = SDL_CreateMutex();
+    cond = SDL_CreateCond();
+    
     for(;;) {
         double x;
         refresh_loop_wait_event(cur_stream, &event);
@@ -3879,7 +3952,7 @@ static void event_loop(VideoState *cur_stream) {
             
             if(finger_position(finger_x, finger_y) == IS_PROGRESS) {
                 // 创建线程进行seek, 因为在触摸滑动(SDL_FINGERMOTION)中进行seek操作会卡帧
-                //params_t params = {cur_stream, frac};
+                //stm_params_t params = {cur_stream, frac};
                 //seek_thread = SDL_CreateThread(seek_stream, "seek thread", (void*)&params);
 
                 int64_t ts = frac * cur_stream->ic->duration;
@@ -3888,13 +3961,29 @@ static void event_loop(VideoState *cur_stream) {
                 stream_seek(cur_stream, ts, 0, 0);
             }
             
-            clear_text(volume_percent);
-            clear_text(brightness_percent);
             
             // 重置所有状态标志
             is_seeking_progress = false;
             is_slide_vertical = false;
             is_slide_horizontal = false;
+            
+            // 唤醒等待的线程，结束seek操作
+            SDL_LockMutex(mutex);
+            is_seek_finished = true;
+            SDL_CondSignal(cond);
+            SDL_UnlockMutex(mutex);
+            
+            // 等待线程结束
+            SDL_WaitThread(seek_thread, NULL);
+            seek_thread = NULL;
+            //SDL_DestroyCond(cond);
+            // 在此处destroy mutex会有视频会卡顿
+            //SDL_DestroyMutex(mutex);
+            
+            // 清空文本
+            clear_text(volume_percent);
+            clear_text(brightness_percent);
+            clear_text(seek_pos_text);
             
             // 暂停之后，当滑动屏幕时可以继续进行绘制
             if(cur_stream->paused) 
@@ -4003,14 +4092,40 @@ do_seek:
                         incr *= 180000.0;
                     pos += incr;
                     stream_seek(cur_stream, pos, incr, 1);
+                    //LOGI(program_name, "%s\n", "seek_by_bytes");
                 } else {
+                    
+                    /**
                     pos = get_master_clock(cur_stream);
+                    
                     if(isnan(pos))
                         pos = (double)cur_stream->seek_pos / AV_TIME_BASE;
                     pos += incr;
+                    
                     if(cur_stream->ic->start_time != AV_NOPTS_VALUE && pos < cur_stream->ic->start_time / (double)AV_TIME_BASE)
                         pos = cur_stream->ic->start_time / (double)AV_TIME_BASE;
                     stream_seek(cur_stream, (int64_t)(pos * AV_TIME_BASE), (int64_t)(incr * AV_TIME_BASE), 0);
+                    */
+                    
+                    is_seeking_progress = true;
+                    is_seek_finished = false;
+                    
+                    params.stream = cur_stream;
+                    params.incr = incr;
+                    params.event = &event;
+                    
+                    if(seek_thread == NULL) {                      
+                        //mutex = SDL_CreateMutex();
+                        //cond = SDL_CreateCond();
+                        seek_thread = SDL_CreateThread(seek_stream, "Seek Thread", &params);
+                    }
+                    
+                    // 唤醒等待的线程，开始进行seek操作
+                    SDL_LockMutex(mutex);
+                    SDL_CondSignal(cond);
+                    SDL_UnlockMutex(mutex);
+                    
+                    //LOGI(program_name, "pos = %f\n", pos);                 
                 }
                 break;
             default:
@@ -4101,6 +4216,12 @@ do_seek:
             break;
         case SDL_QUIT:
         case FF_QUIT_EVENT:
+            // destroy mutex and cond
+            if(mutex != NULL && cond != NULL) {
+                SDL_DestroyCond(cond);
+                SDL_DestroyMutex(mutex);
+            }
+        
             do_exit(cur_stream);
             break;
         default:
