@@ -3636,8 +3636,7 @@ static int slide_direction(float finger_x, float finger_y, float dx, float dy) {
 // 判断在屏幕上触摸的位置
 static int finger_position(float finger_x, float finger_y) {
     if(finger_x >= 0 && finger_x <= screen_width
-            && finger_y >= bar_start_y - 100 && finger_y <= bar_end_y + 100 
-            && is_show_component) {
+            && finger_y >= bar_start_y - 100 && finger_y <= bar_end_y + 100 ) {
         // 进度条
         return IS_PROGRESS;
     } else if(finger_x >= 0 && finger_x < screen_width / 2) {
@@ -3883,7 +3882,8 @@ static void event_loop(VideoState *cur_stream) {
             start_x = finger_x = event.tfinger.x * screen_width;
             start_y = finger_y = event.tfinger.y * screen_height;
             
-            if(finger_position(finger_x, finger_y) == IS_PROGRESS){
+            if(finger_position(finger_x, finger_y) == IS_PROGRESS 
+                && is_show_component && total_duration > 0) {
                 is_seeking_progress = true;
                 // 计算当前进度值
                 frac = calcu_progress_percent(finger_x, finger_y);
@@ -3903,7 +3903,9 @@ static void event_loop(VideoState *cur_stream) {
             float dx = event.tfinger.dx * screen_width;
             float dy = event.tfinger.dy * screen_height;
             
-            if(finger_position(finger_x, finger_y) == IS_PROGRESS) { // 当前滑动的位置是进度条
+            // 拖动进度条进行seek操作
+            if(finger_position(finger_x, finger_y) == IS_PROGRESS 
+                && is_show_component && total_duration > 0) { // 当前滑动的位置是进度条
                 is_seeking_progress = true;
                 // 计算当前进度值
                 frac = calcu_progress_percent(finger_x, finger_y);
@@ -3927,8 +3929,10 @@ static void event_loop(VideoState *cur_stream) {
                     int brightness = calcu_brightness_level(finger_x, finger_y, dx, dy);
                     set_brightness_level(brightness);
                     
-                } else if(is_slide_horizontal) { // 水平方向滑动
+                } else if(is_slide_horizontal && total_duration > 0) { // 水平方向滑动
                     // 滑动屏幕进行seek
+                    // 媒体文件总时长大于0，才可以进行seek
+                    // 如果是流媒体则可能无法获取到总时长，total_duration就等于0
                     incr = calcu_seek_interval(dx, dy);
                     goto do_seek;
                 }
@@ -3943,8 +3947,10 @@ static void event_loop(VideoState *cur_stream) {
                     int volume = calcu_volume_level(finger_x, finger_y, dx, dy);
                     set_volume_level(cur_stream, volume);
                     
-                } else if (is_slide_horizontal) { // 水平方向滑动
+                } else if (is_slide_horizontal && total_duration > 0) { // 水平方向滑动
                     // 滑动屏幕进行seek
+                    // 媒体文件总时长大于0，才可以进行seek
+                    // 如果是流媒体则可能无法获取到总时长，total_duration就等于0
                     incr = calcu_seek_interval(dx, dy);
                     goto do_seek;
                 }
@@ -3960,7 +3966,8 @@ static void event_loop(VideoState *cur_stream) {
             finger_x = event.tfinger.x * screen_width;
             finger_y = event.tfinger.y * screen_height;
             
-            if(finger_position(finger_x, finger_y) == IS_PROGRESS) {
+            if(finger_position(finger_x, finger_y) == IS_PROGRESS 
+                && is_show_component && total_duration > 0) {
                 // 创建线程进行seek, 因为在触摸滑动(SDL_FINGERMOTION)中进行seek操作会卡帧
                 //stm_params_t params = {cur_stream, frac};
                 //seek_thread = SDL_CreateThread(seek_stream, "seek thread", (void*)&params);
