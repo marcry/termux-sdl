@@ -5,9 +5,7 @@ project(gles2cube)
 set(CMAKE_C_COMPILER clang)
 set(CMAKE_CXX_COMPILER clang++)
 
-# set library output directory
-# because the gles2cube library needs shaders files(shader.frag and shader.vert)
-# so set output directory is CMAKE_SOURCE_DIR not CMAKE_BINARY_DIR
+# set library output directory for load resource files
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 include_directories(
