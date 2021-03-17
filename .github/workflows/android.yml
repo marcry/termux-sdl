@@ -43,3 +43,6 @@ jobs:
         BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
         FILE: "app/build/outputs/apk/debug/${{ steps.buildDebug.outputs.debugName }}.apk"
         COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+      run: | 
+        ESCAPED=`python3 -c 'import json,os,urllib.parse; print(urllib.parse.quote(json.dumps(os.environ["COMMIT_MESSAGE"])))'`
+
