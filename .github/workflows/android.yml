@@ -28,11 +28,12 @@ jobs:
       run: ./gradlew clean assembleDebug
 
     - name: Create release and upload apk
+      # https://github.com/marketplace/actions/create-release-with-debug-apk
       uses: underwindfall/create-release-with-debugapk@v2.0.0
       env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: v1.0.0
+        tag_name: v3.0
         asset_path: app/build/outputs/apk/debug/app-debug.apk
-        asset_name: termux-sdl-debug.apk
+        asset_name: termux-sdl-debug-${{tag_name}}.apk
         asset_content_type: application/zip
