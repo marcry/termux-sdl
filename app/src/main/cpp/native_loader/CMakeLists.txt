@@ -7,6 +7,8 @@ include_directories(
     ${ANDROID_NDK}/sources/android/native_app_glue
     )
 
+set(CMAKE_SHARED_LINKER_FLAGS "-u ANativeActivity_onCreate")
+
 add_library(glue STATIC ${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c)
 
 add_library(native_loader SHARED native_loader.cpp)
