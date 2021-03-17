@@ -1,37 +1,35 @@
-name: Android CI
+name: CI
 
 on:
   push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+    branches: 
+      - master
 
 jobs:
+
   build:
+
     runs-on: ubuntu-latest
 
+
     steps:
+
     - uses: actions/checkout@v2
-    - name: set up JDK 1.8
+      
+    - name: Use Java8
       uses: actions/setup-java@v1
       with:
-        java-version: 1.8
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-    - name: Build with Gradle
-      id: buildDebug
-      run: |
-        ./gradlew assembleDebug
-        echo "::set-output name=debugName::`ls app/build/outputs/apk/debug/termux-sdl*-v*-debug.apk | awk -F '(/|.apk)' '{print $6}'`"
-    - name: Release debug apk
-      if: success()
-      uses: actions/checkout@v2
-      uses: actions/upload-artifact@v2
-      with:
-        name: ${{ steps.buildDebug.outputs.debugName }}
-        path: "app/build/outputs/apk/debug/*.apk"
+          java-version: 1.8
+
+    - name: Build debug apk
+      run: ./gradlew clean assembleDebug
+
+    - name: Create release and upload apk
+      uses: underwindfall/create-release-with-debugapk@v2.0.0
       env:
-        CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
-        BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-        FILE: "app/build/outputs/apk/debug/${{ steps.buildDebug.outputs.debugName }}.apk"
-        COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v1.0.0
+        asset_path: app/build/outputs/apk/debug/app-debug.apk
+        asset_name: termux-sdl-debug.apk
+        asset_content_type: application/zip
