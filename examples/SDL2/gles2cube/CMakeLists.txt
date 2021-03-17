@@ -46,6 +46,7 @@ target_link_libraries(${PROJECT_NAME}
     )
 
 # am start -S $(shell am 2>&1 | grep -q '\-\-user' && echo '--user 0') -n com.termux.sdl/.TermuxSDLActivity -e sdlmain /path/to/libxxx.so
+# add custom target for make run
 add_custom_target(run
     COMMAND am start -S \$\(shell am 2>&1 | grep -q '\\-\\-user' && echo '--user 0'\) -n com.termux.sdl/.TermuxSDLActivity -e sdlmain ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/lib${PROJECT_NAME}.so
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
