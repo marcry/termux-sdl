@@ -35,7 +35,6 @@ jobs:
       with:
         name: ${{ steps.buildDebug.outputs.debugName }}
         path: "app/build/outputs/apk/debug/*.apk"
-        path: "app/build/outputs/mapping/release"
     - name: Post to channel
       if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
       env:
