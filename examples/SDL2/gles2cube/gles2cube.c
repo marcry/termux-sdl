@@ -11,8 +11,8 @@
 #include <math.h>
 #include <sys/time.h>
 
-#include <SDL.h>
-#include <SDL_opengles2.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_opengles2.h>
 
 #include "shader.h"
 #include "matrix.h"

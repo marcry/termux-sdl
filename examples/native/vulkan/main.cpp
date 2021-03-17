@@ -14,10 +14,10 @@
 // Modified by n0n3m4, now demo compiles with gcc
 
 #include <android/log.h>
-#include "android_native_app_glue.h"
+#include <android_native_app_glue.h>
 #include "main.hpp"
 
-#include "vulkan_wrapper.h"
+#include "vulkan.h"
 #include <android/log.h>
 #include <cassert>
 #include <cstring>

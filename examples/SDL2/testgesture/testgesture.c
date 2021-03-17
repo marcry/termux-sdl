@@ -18,9 +18,9 @@
 #include <stdio.h>
 #include <math.h>
 
-#include <SDL.h>
-#include <SDL_touch.h>
-#include <SDL_gesture.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_touch.h>
+#include <SDL2/SDL_gesture.h>
 
 /* Make sure we have good macros for printing 32 and 64 bit values */
 #ifndef PRIs32

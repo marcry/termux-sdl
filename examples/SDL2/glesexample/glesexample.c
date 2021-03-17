@@ -18,8 +18,8 @@
 #include <string.h>
 #include <math.h>
 
-#include <SDL.h>
-#include <SDL_opengles.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_opengles.h>
 
 static SDL_Window *window;
 static SDL_GLContext context;
