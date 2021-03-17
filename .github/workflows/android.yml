@@ -35,13 +35,8 @@ jobs:
       with:
         name: ${{ steps.buildDebug.outputs.debugName }}
         path: "app/build/outputs/apk/debug/*.apk"
-    - name: Post to channel
-      if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
       env:
         CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
         BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
         FILE: "app/build/outputs/apk/debug/${{ steps.buildDebug.outputs.debugName }}.apk"
         COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
-      run: | 
-        ESCAPED=`python3 -c 'import json,os,urllib.parse; print(urllib.parse.quote(json.dumps(os.environ["COMMIT_MESSAGE"])))'`
-
