@@ -5,15 +5,20 @@ This is a termux sdl plugin for compiling and running SDL2 and native app.
 #### How to compiling SDL2 and native program:
 
 ```bash
-# extract the examples/libs.zip file to /data/data/com.termux/files/usr/lib
-unzip libs.zip -d /data/data/com.termux/files/usr/lib
+# compile examples
+cd examples/SDL2/draw2
 
-# extract the examples/headers.zip file to /data/data/com.termux/files/usr/include
-unzip headers.zip -d /data/data/com.termux/files/usr/include
+# create build directory
+mkdir build && cd build
 
-# compiling the examples
-cd /path/to/termux-sdl/examples/SDL2/draw2
+# execute cmake 
+cmake ..
+
+# start running
 make run
+
+# compile your own program please refer to examples 
+
 ```
 ----
 
