@@ -5,7 +5,7 @@ project(gles2cube)
 set(CMAKE_C_COMPILER clang)
 set(CMAKE_CXX_COMPILER clang++)
 
-# set library output directory for load resource files
+# set the library output directory for load resource files
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR})
 
 include_directories(
