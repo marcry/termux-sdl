@@ -17,7 +17,7 @@ cmake ..
 # start running
 make run
 
-# compile your own program please refer to examples 
+# compile your own program, please refer to examples 
 
 ```
 ----
