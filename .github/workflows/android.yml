@@ -100,7 +100,7 @@ jobs:
         uses: actions/create-release@v1
         env:
           # GitHub 会自动创建 GITHUB_TOKEN 密码以在工作流程中使用
-          GITHUB_TOKEN: $
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # 设置时区，默认是格林尼治时间
           # TZ: Asia/Shanghai
         with:
@@ -115,7 +115,7 @@ jobs:
         if: steps.create_release.outputs.upload_url
         uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: $
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: $ 
           asset_path: ./termux-sdl-debug-$.apk
