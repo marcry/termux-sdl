@@ -27,7 +27,7 @@ make run
 </div>
 
 ----
-#### Using Github Actions to auto building debug app
+#### Using github actions to auto building debug app
 If you want to use github actions to build debug app.</br>
 please fork this repository, then execute the command as below.
 
