@@ -4,6 +4,10 @@ on:
   push:
     # Sequence of patterns matched against refs/tags
     tags:
+    # delete local tag (git tag -d v2.0)
+    # delete remote tag (git push origin :refs/tags/v2.0)
+    # add tag (git tag -a v2.0 -m "release 2.0 version")
+    # push tag (git push origin --tag)
       - 'v*' # Push events to matching v*, i.e. v1.0, v2.0.5
 
 
@@ -45,7 +49,7 @@ jobs:
           name: termux-sdl-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           
-  # jobs for release apk
+  # jobs for deploy apk
   deploy:
     name: Deploy Apk
     runs-on: ubuntu-latest
