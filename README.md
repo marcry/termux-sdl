@@ -35,7 +35,7 @@ please fork this repository, then execute the command as below.
 # clone your own repository
 git clone https://github.com/your_repository/termux-sdl
 
-# 
+# change to the termux-sdl directory
 cd termux-sdl
 
 # add a tag v2.5 v3.0 ..etc
