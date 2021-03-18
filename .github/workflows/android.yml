@@ -12,7 +12,7 @@ jobs:
 
   # jobs for test
   test:
-    name: Run Unit Tests
+    name: Run Unit Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -22,12 +22,12 @@ jobs:
         with:
           java-version: 1.8
           
-      - name: Unit tests
+      - name: Unit Test
         run: bash ./gradlew test --stacktrace
   
   # jobs for building apk 
   build:
-    name: Generate Apk
+    name: Building Apk
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -35,7 +35,7 @@ jobs:
         uses: actions/setup-java@v1
         with:
           java-version: 1.8
-      - name: Build Debug Apk
+      - name: build debug apk
         run: bash ./gradlew assembleDebug --stacktrace
       
       # cache apk file
@@ -44,7 +44,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: app/build/outputs/apk/debug
-          key: ${{ runner.os }}-apk
+          key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
   
   # jobs for release apk
   deploy:
@@ -79,7 +79,7 @@ jobs:
           prerelease: false
           
       # upload apk
-      - name: Upload Release Asset
+      - name: Upload Apk
         id: upload-release-asset 
         # check upload_url
         if: steps.create_release.outputs.upload_url
@@ -88,6 +88,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: app/build/outputs/apk/debug/app-debug.apk 
+          asset_path: app-debug.apk 
           asset_name: termux-sdl-debug-${{ steps.prepare_release.outputs.tag_name }}.apk 
           asset_content_type: application/vnd.android.package-archive
