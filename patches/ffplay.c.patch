@@ -1,7 +1,6 @@
-+++ diff -uN --ignore-matching-lines=RE --ignore-all-space --ignore-blank-lines --color=auto fftools/ffplay.c termux-sdl/app/src/main/cpp/ffplay/ffplay.c > /sdcard/ffplay.c.patch
-
---- fftools/ffplay.c	2021-03-09 12:03:24.920033847 +0800
-+++ termux-sdl/app/src/main/cpp/ffplay/ffplay.c	2021-03-09 12:03:44.886702503 +0800
+--- diff -uN --ignore-matching-lines=RE --ignore-all-space --ignore-blank-lines --color=auto /sdcard/ffplay.c app/src/main/cpp/ffplay/ffplay.c > /sdcard/ffplay.c.patch
+--- /sdcard/download/ffplay.c	2021-03-18 22:06:01.991874332 +0800
++++ app/src/main/cpp/ffplay/ffplay.c	2021-03-18 22:04:01.001862279 +0800
 @@ -29,6 +29,8 @@
  #include <limits.h>
  #include <signal.h>
@@ -42,18 +41,25 @@
  static int screen_left = SDL_WINDOWPOS_CENTERED;
  static int screen_top = SDL_WINDOWPOS_CENTERED;
  static int audio_disable;
-@@ -351,6 +355,10 @@
+@@ -347,11 +351,17 @@
+ double rdftspeed = 0.02;
+ static int64_t cursor_last_shown;
+ static int cursor_hidden = 0;
++
+ #if CONFIG_AVFILTER
  static const char **vfilters_list = NULL;
  static int nb_vfilters = 0;
  static char *afilters = NULL;
 +static char vfilters[20] = {""};
 +// playback speed
-+static float af_speed = 0.0f;
-+static float vf_speed = 0.0f;
++static float af_speed = 1.0f;
++static float vf_speed = 1.0f;
  #endif
++
  static int autorotate = 1;
  static int find_stream_info = 1;
-@@ -368,6 +376,7 @@
+ static int filter_nbthreads = 0;
+@@ -368,6 +378,7 @@
  static SDL_Renderer *renderer;
  static SDL_RendererInfo renderer_info = {0};
  static SDL_AudioDeviceID audio_dev;
@@ -61,22 +67,26 @@
  
  static const struct TextureFormatEntry {
      enum AVPixelFormat format;
-@@ -395,10 +404,38 @@
-                                  { AV_PIX_FMT_NONE,           SDL_PIXELFORMAT_UNKNOWN },
-                              };
+@@ -395,10 +406,42 @@
+     { AV_PIX_FMT_NONE,           SDL_PIXELFORMAT_UNKNOWN },
+ };
  
-+
++// ==========================================
 +// 这些方法实现在src/core/android/SDL_android.c
 +
 +// 设置亮度
 +extern void SDL_AndroidSetBrightness(int);
 +// 获取亮度
 +extern int SDL_AndroidGetBrightness(void);
++// 最大亮度
++extern int SDL_AndroidGetMaxBrightness(void);
 +
 +// 设置音量
 +extern void SDL_AndroidSetVolume(int);
 +// 获取音量
 +extern int SDL_AndroidGetVolume(void);
++// 最大音量
++extern int SDL_AndroidGetMaxVolume(void);
 +
 +// ==========================================
 +
@@ -90,7 +100,7 @@
 +    if(arg != NULL && strcmp(vfilters, "") == 0) {
 +        strncpy(vfilters, arg, strlen(arg));
 +        if(strstr(vfilters, "setpts") != NULL) {
-+            float vf_pts = 0;
++            float vf_pts = 1.0f;
 +            sscanf(/*vfilters*/arg, "setpts=%f*PTS", &vf_pts);
 +            vf_speed = 1.0f / vf_pts;
 +            //LOGI(program_name, "vf_speed = %f\n", vf_speed);
@@ -100,65 +110,123 @@
      return 0;
  }
  #endif
-@@ -1262,10 +1299,218 @@
+@@ -1262,10 +1305,298 @@
      av_free(is);
  }
  
-+// ==================== draw progress =======================
-+int start_x, start_y;
-+int end_x, end_y;
-+float curr_end_x;
-+
-+int line_width = 8;
-+float progress = 0;
-+// 拖动进度条标志
-+bool is_seek_progress = false;
-+
-+static void draw_progress(SDL_Renderer *renderer) {
-+    // 绘制进度条线
-+    lineColor(renderer, start_x, start_y, end_x, end_y, 0xFFFFFFFF);
-+    // 绘制当前进度 curr_end_x为当前播放进度条 结束的x坐标
-+
-+    curr_end_x = start_x + (end_x - start_x) * progress / 100;
-+    if(curr_end_x > end_x)
-+        curr_end_x = end_x;
-+    thickLineRGBA(renderer, start_x, start_y,
-+                  curr_end_x, end_y, line_width,
-+                  0x66, 0xba, 0xff, 0xff);
-+
-+    // 绘制进度条小圆
-+    filledCircleRGBA(renderer, curr_end_x, end_y, line_width * 2,
-+                     0x66, 0xba, 0xff, 0xff);
-+}
 +
 +// ==================== draw text =======================
 +TTF_Font *font = NULL;
 +SDL_Color text_color = { 0xff, 0xff, 0xff, 0};
 +SDL_Rect text_rect;
++
++// 设置字体大小
 +int font_size = 45;
++int default_font_size = 45;
 +
-+char total_duration[10] = {"00:00"};
-+char curr_duration[10] = {"00:00"};
++// 显示音量 亮度文本
++char volume_percent[5];
++char brightness_percent[5];
 +
-+char curr_volume[] = {"100"};
-+char curr_bright[] = {"100"};
++// 显示暂停文本
++char paused_text[8];
 +
++char seek_pos_text[20];
 +
-+int curr_time, total_time;
++// 媒体文件当前播放时长 总时长
++int curr_duration, total_duration;
++
++// 播放速度
 +float playback_speed = 1.0f;
-+// 播放完成标志
-+bool is_play_finished = false;
-+// 音量改变标志
-+bool is_changed_volume = false;
-+// 亮度改变标志
-+bool is_changed_bright = false;
 +
++// 默认字体
 +const char *font_path = "/system/fonts/DroidSans.ttf";
 +
-+// 文本位置
-+enum text_position {
-+    LEFT_TEXT, TOP_TEXT, RIGHT_TEXT, BOTTOM_TEXT, CENTER_TEXT, ANY_TEXT
-+};
++// 进度条坐标
++int bar_start_x, bar_start_y;
++int bar_end_x, bar_end_y;
++float curr_bar_x, curr_bar_y;
++
++// 进度条宽度
++int line_width = 8;
++float progress = 0;
++
++// 拖动进度条标志
++bool is_seeking_progress = false;
++
++// 是否显示进度条 按钮等标志
++bool is_show_component = true;
++
++// 格式化时间
++static void format_time(int seconds, char *fmt_time) {
++
++    int hh = seconds / 3600;
++    int mm = (seconds % 3600) / 60;
++    int ss = seconds % 60;
++    
++    if(fmt_time != NULL) 
++        memset(fmt_time, 0, strlen(fmt_time));
++    
++    if(hh > 0) {
++        sprintf(fmt_time, "%02d:%02d:%02d", hh, mm, ss);
++    } else {
++        sprintf(fmt_time, "%02d:%02d", mm, ss);
++    }
++}
++
++// 获取播放速度，用于设置时间速度
++static void set_playback_speed() {
++
++    if(vf_speed != 1.0f && af_speed != 1.0f) {
++        playback_speed = vf_speed >= af_speed ? vf_speed : af_speed;
++    } else {
++
++        if(vf_speed != 1.0f)
++            playback_speed = vf_speed;
++        else if(af_speed != 1.0f)
++            playback_speed = af_speed;
++        else
++            playback_speed = 1.0f;
++    }
++}
++
++// 设置当前时长
++static void set_current_duration(int duration) {
++    curr_duration = duration;
++    
++    // 当前显示的时间 = 时间 * 播放速度
++    if(curr_duration >= total_duration)
++        curr_duration = total_duration;
++        
++    // 计算当前进度值百分比
++    progress = (curr_duration * 100) / total_duration;
++}
++
++// 设置总共的时长
++static void set_total_duration(int duration) {
++
++    //int tns  = is->ic->duration / 1000000LL;
++    total_duration = duration;
++}
++
++// 绘制进度条
++static void draw_progress(SDL_Renderer *renderer) {
++    // 绘制进度条线
++    lineColor(renderer, bar_start_x, bar_start_y, bar_end_x, bar_end_y, 0xFFFFFFFF);
++    // 绘制当前进度 curr_bar_x为当前播放进度条 结束的x坐标
++
++    curr_bar_x = bar_start_x + ((bar_end_x - bar_start_x) * progress / 100);
++    if(curr_bar_x > bar_end_x)
++        curr_bar_x = bar_end_x;
++    thickLineRGBA(renderer, bar_start_x, bar_start_y,
++                  curr_bar_x, bar_end_y, line_width,
++                  0x66, 0xba, 0xff, 0xff);
++
++    // 绘制进度条小圆
++    filledCircleRGBA(renderer, curr_bar_x, bar_end_y, line_width * 2,
++                     0x66, 0xba, 0xff, 0xff);
++}
++
 +
 +// 初始化字体
 +static void init_font(const char *font_path, int ptsize) {
@@ -166,14 +234,14 @@
 +    /* Initialize the TTF library */
 +    if(TTF_Init() < 0) {
 +        LOGE(program_name, "Init TTF: %s\n", SDL_GetError());
-+        return;
++        TTF_Quit();
 +    }
 +
 +    font = TTF_OpenFont(font_path, ptsize);
 +
 +    if(!font) {
 +        LOGE(program_name, "Couldn't load TTF: %s\n", SDL_GetError());
-+        return;
++        TTF_Quit();
 +    }
 +
 +    // 文本风格
@@ -184,127 +252,149 @@
 +
 +}
 +
-+// 绘制文本
-+static void draw_text(SDL_Renderer *renderer, const char *text, int x, int y, int margin, int flag) {
-+
++// 测量文本宽度高度
++static SDL_Surface* measure(const char *text) {
 +    // 消除锯齿感绘制文本
 +    SDL_Surface *surface = TTF_RenderUTF8_Blended(font, text, text_color);
 +    if(!surface) {
 +        LOGE(program_name, "Surface: %s\n", SDL_GetError());
++        SDL_Quit();
 +    }
++    
++    return surface;
++}
++
++// 绘制文本
++static void draw_text(SDL_Renderer *renderer, SDL_Surface *surface, const char *text, int x, int y) {
 +
 +    // 文本纹理
 +    SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
 +    if(!texture) {
 +        LOGE(program_name, "Texture: %s\n", SDL_GetError());
++        SDL_Quit();
 +    }
 +
-+    // 文本绘制区域
++    // 文本绘制坐标
 +    text_rect.x = x; // 绘制文本开始x坐标
 +    text_rect.y = y; // 绘制文本开始y坐标
-+    text_rect.w = surface->w;
-+    text_rect.h = surface->h;
-+
-+    // 如果是绘制右边的文本，文本的开始x坐标需要重新计算
-+    // 如果不预先获得文本宽度，则绘制的文本可能显示不全
-+    // x = screen_width - surface->w(文本宽度)
-+    if(flag == RIGHT_TEXT) {
-+        text_rect.x = screen_width - text_rect.w - margin;
-+    } else if(flag == BOTTOM_TEXT) {
-+        text_rect.y = screen_height - text_rect.h - margin;
-+    } else if(flag == CENTER_TEXT) {
-+        text_rect.x = screen_width / 2 - text_rect.w / 2;
-+        text_rect.y = screen_height / 2 - text_rect.h / 2;
-+    }
++    
++    text_rect.w = surface->w; // 文本宽度
++    text_rect.h = surface->h;  // 文本高度
 +
 +    SDL_FreeSurface(surface);
 +    SDL_RenderCopy(renderer, texture, NULL, &text_rect);
 +
 +    SDL_DestroyTexture(texture);
-+
 +}
 +
-+// 格式化时间
-+static void format_time(int seconds, char *time) {
-+
-+    int hh = seconds / 3600;
-+    int mm = (seconds % 3600) / 60;
-+    int ss = seconds % 60;
-+
-+    if(hh > 0) {
-+        sprintf(time, "%02d:%02d:%02d", hh, mm, ss);
-+    } else {
-+        sprintf(time, "%02d:%02d", mm, ss);
-+    }
++// draw volume and brightness level
++static void draw_level_text(char *level) {
++    // 显示当前的音量或者亮度值
++    font_size = 200;
++    TTF_SetFontSize(font, font_size);
++    
++    SDL_Surface *surface = measure(level);
++    int text_x = screen_width / 2 - surface->w / 2;
++    int text_y = screen_height / 2 - surface->h / 2; 
++    draw_text(renderer, surface, level, text_x, text_y);
++            
++    // 恢复字体大小
++    font_size = default_font_size;
++    TTF_SetFontSize(font, font_size);
 +}
 +
-+// 获取播放速度，用于设置时间速度
-+static void set_playback_speed() {
-+
-+    if(vf_speed != 0 && af_speed != 0) {
-+        playback_speed = vf_speed >= af_speed ? vf_speed : af_speed;
-+    } else {
-+
-+        if(vf_speed != 0)
-+            playback_speed = vf_speed;
-+        else if(af_speed != 0)
-+            playback_speed = af_speed;
-+    }
++// 绘制暂停文本
++static void draw_paused_text(char *paused) {
++    font_size = 150;
++    TTF_SetFontSize(font, font_size);
++    
++    SDL_Surface *surface = measure(paused);
++    int text_x = screen_width / 2 - surface->w / 2;
++    int text_y = screen_height / 2 - surface->h / 2; 
++    draw_text(renderer, surface, paused, text_x, text_y);
++            
++    // 恢复字体大小
++    font_size = default_font_size;
++    TTF_SetFontSize(font, font_size);
 +}
 +
-+// SDL_ttf绘制当前时间显示文本
-+static void set_curr_duration(int seconds) {
-+    // 当前显示的时间 = 时间 * 播放速度
-+    if(seconds > total_time)
-+        seconds = total_time;
-+    format_time(seconds, curr_duration);
-+    // 计算当前进度值百分比
-+    curr_time = seconds;
-+    progress = (curr_time * 100) / total_time;
-+}
 +
-+// SDL_ttf绘制总共的时间显示文本
-+static void set_total_duration(int seconds) {
-+
-+    //int tns  = is->ic->duration / 1000000LL;
-+    total_time = seconds;
-+    format_time(seconds, total_duration);
++// 绘制seek时间文本
++static void draw_seek_text(char *seek_text) {
++    font_size = 115;
++    TTF_SetFontSize(font, font_size);
++    
++    SDL_Surface *surface = measure(seek_text);
++    int text_x = screen_width / 2 - surface->w / 2;
++    int text_y = screen_height / 2 - surface->h / 2; 
++    draw_text(renderer, surface, seek_text, text_x, text_y);
++            
++    // 恢复字体大小
++    font_size = default_font_size;
++    TTF_SetFontSize(font, font_size);
 +}
 +
 +
 +// 绘制函数
 +static void draw(SDL_Renderer *renderer) {
-+    // 绘制左边文本(当前时间)
-+    draw_text(renderer, curr_duration, 10, screen_height - 200, 0, LEFT_TEXT);
-+    // 在绘制左边的文本时，设置进度条开始坐标
-+    start_x = text_rect.x + text_rect.w + 30;
-+    start_y = text_rect.y + text_rect.h / 2;
++    // 是否显示进度条 按键等标志
++    if(is_show_component) {
++        int text_x = 0;
++        int text_y = 0;
++    
++        // 绘制文本之前首先测量文本尺寸，用于计算文本坐标
++        // surface->w 文本宽度
++        // surface->h 文本高度
++        char duration_text[10];
++        format_time(curr_duration, duration_text);
++        SDL_Surface *surface = measure(duration_text);
++    
++        // 绘制左边文本(当前时长)
++        text_x = 10;
++        text_y = screen_height - 200;
++        draw_text(renderer, surface, duration_text, text_x, text_y);
 +
-+    // 绘制右边文本(总共时间)
-+    draw_text(renderer, total_duration, screen_width, screen_height - 200, 10, RIGHT_TEXT);
-+    // 在绘制右边的文本时，设置进度条结束坐标
-+    end_x = text_rect.x - 30;
-+    end_y = text_rect.y + text_rect.h / 2;
++        // 在绘制左边的文本时，设置进度条开始坐标
++        bar_start_x = text_x + surface->w + 30;
++        bar_start_y = text_y + surface->h / 2;
 +
-+    // 显示当前的音量或者亮度值
-+    if(is_changed_volume || is_changed_bright) {
-+        font_size = 200;
-+        TTF_SetFontSize(font, font_size);
-+        if(is_changed_volume) {
-+            draw_text(renderer, curr_volume, screen_width / 2, screen_height / 2, 0, CENTER_TEXT);
-+        } else {
-+            draw_text(renderer, curr_bright, screen_width / 2, screen_height / 2, 0, CENTER_TEXT);
-+        }
++        // 绘制右边文本(总共时长)
++        format_time(total_duration, duration_text);
++        surface = measure(duration_text);
++        text_x = screen_width - surface->w - 10;
++        text_y = screen_height - 200;
++        draw_text(renderer, surface, duration_text, text_x, text_y);
 +
-+        font_size = 45;
-+        TTF_SetFontSize(font, font_size);
++        // 在绘制右边的文本时，设置进度条结束坐标
++        bar_end_x = text_x - 30;
++        bar_end_y = text_y + surface->h / 2;
++
++        // 绘制进度条
++        draw_progress(renderer);
 +    }
-+
-+    // 绘制进度条
-+    draw_progress(renderer);
++    
++    // 绘制音量文本
++    if(strcmp(volume_percent, "") != 0) {
++        draw_level_text(volume_percent);
++    }
++    
++    // 绘制亮度文本
++    if(strcmp(brightness_percent, "") != 0) {
++        draw_level_text(brightness_percent);
++    }
++    
++    // 绘制暂停文本
++    if(strcmp(paused_text, "") != 0) {
++        draw_paused_text(paused_text);
++    }
++    
++    // 绘制seek时间文本
++    if(strcmp(seek_pos_text, "") != 0) {
++        draw_seek_text(seek_pos_text);
++    }
 +}
 +
-+
++// ================================================
 +
  static void do_exit(VideoState *is) {
      if (is) {
@@ -319,7 +409,7 @@
      if (renderer)
          SDL_DestroyRenderer(renderer);
      if (window)
-@@ -1288,20 +1533,20 @@
+@@ -1288,20 +1619,20 @@
  
  static void set_default_window_size(int width, int height, AVRational sar) {
      SDL_Rect rect;
@@ -346,7 +436,7 @@
  
      if (!window_title)
          window_title = input_filename;
-@@ -1330,6 +1575,10 @@
+@@ -1330,6 +1661,10 @@
          video_audio_display(is);
      else if (is->video_st)
          video_image_display(is);
@@ -357,7 +447,7 @@
      SDL_RenderPresent(renderer);
  }
  
-@@ -1340,7 +1589,7 @@
+@@ -1340,7 +1675,7 @@
          return c->pts;
      } else {
          double time = av_gettime_relative() / 1000000.0;
@@ -366,7 +456,7 @@
      }
  }
  
-@@ -1359,6 +1609,8 @@
+@@ -1359,6 +1695,8 @@
  static void set_clock_speed(Clock *c, double speed) {
      set_clock(c, get_clock(c), c->serial);
      c->speed = speed;
@@ -375,22 +465,22 @@
  }
  
  static void init_clock(Clock *c, int *queue_serial) {
-@@ -1658,6 +1911,14 @@
+@@ -1658,6 +1997,14 @@
                  av_diff = get_master_clock(is) - get_clock(&is->vidclk);
              else if (is->audio_st)
                  av_diff = get_master_clock(is) - get_clock(&is->audclk);
 +
 +            // LOGI(program_name, "curr time: %7.2f\n", get_master_clock(is));
 +            // 当前播放的时间 (clock * playback_speed)
-+            // 当拖动进度条时，由calcu_curr_progress()方法设置当前时间，所有此处要判断is_seek_progress的值
-+            if(!is_play_finished && !is_seek_progress)
-+                set_curr_duration(((int)get_master_clock(is)) * playback_speed);
++            // 当拖动进度条时由calcu_progress_percent()方法设置当前时间，所有此处要判断is_seeking_progress的值
++            if(progress < 100 && !is_seeking_progress)
++                set_current_duration(((int)get_master_clock(is)) * playback_speed);
 +
 +
              av_log(NULL, AV_LOG_INFO,
                     "%7.2f %s:%7.3f fd=%4d aq=%5dKB vq=%5dKB sq=%5dB f=%"PRId64"/%"PRId64"   \r",
                     get_master_clock(is),
-@@ -1988,8 +2249,7 @@
+@@ -1988,8 +2335,7 @@
  #if CONFIG_AVFILTER
              dec_channel_layout = get_valid_channel_layout(frame->channel_layout, frame->channels);
  
@@ -400,7 +490,7 @@
                                 frame->format, frame->channels)    ||
                  is->audio_filter_src.channel_layout != dec_channel_layout ||
                  is->audio_filter_src.freq           != frame->sample_rate ||
-@@ -2010,6 +2270,16 @@
+@@ -2010,6 +2356,16 @@
                  is->audio_filter_src.freq           = frame->sample_rate;
                  last_serial                         = is->auddec.pkt_serial;
  
@@ -417,7 +507,7 @@
                  if ((ret = configure_audio_filters(is, afilters, 1)) < 0)
                      goto the_end;
              }
-@@ -2268,7 +2538,7 @@
+@@ -2268,7 +2624,7 @@
   * stored in is->audio_buf, with size in bytes given by the return
   * value.
   */
@@ -426,7 +516,7 @@
      int data_size, resampled_data_size;
      int64_t dec_channel_layout;
      av_unused double audio_clock0;
-@@ -2388,7 +2658,7 @@
+@@ -2388,7 +2744,7 @@
  
      while (len > 0) {
          if (is->audio_buf_index >= is->audio_buf_size) {
@@ -435,7 +525,7 @@
              if (audio_size < 0) {
                  /* if error, just output silence */
                  is->audio_buf = NULL;
-@@ -2759,6 +3029,9 @@
+@@ -2759,6 +3115,9 @@
          }
      }
  
@@ -445,25 +535,21 @@
      if (ic->pb)
          ic->pb->eof_reached = 0; // FIXME hack, ffplay maybe should not use avio_feof() to test for the end
  
-@@ -2941,7 +3215,17 @@
+@@ -2941,7 +3301,13 @@
          if (!is->paused &&
                  (!is->audio_st || (is->auddec.finished == is->audioq.serial && frame_queue_nb_remaining(&is->sampq) == 0)) &&
                  (!is->video_st || (is->viddec.finished == is->videoq.serial && frame_queue_nb_remaining(&is->pictq) == 0))) {
 +
 +            // 播放完成
-+            is_play_finished = true;
-+            progress = 100;
-+            strcpy(curr_duration, total_duration);
-+
++            curr_duration = total_duration;
++            
              if (loop != 1 && (!loop || --loop)) {
-+                // 循环播放，重新设置当前时间
-+                is_play_finished = false;
-+                progress = 0;
-+                strcpy(curr_duration, "00:00");
++                // 循环播放，重新设置进度和时间
++                progress = curr_duration = 0;
                  stream_seek(is, start_time != AV_NOPTS_VALUE ? start_time : 0, 0, 0);
              } else if (autoexit) {
                  ret = AVERROR_EOF;
-@@ -3193,15 +3477,216 @@
+@@ -3193,15 +3559,465 @@
                                   AV_TIME_BASE_Q), 0, 0);
  }
  
@@ -471,216 +557,553 @@
 +
 +// ============================================================
 +
++#define UNKNOWN (-1)
++
 +// 滑动方向
-+enum move_direction {
-+    MOVE_LEFT, MOVE_UP, MOVE_RIGHT, MOVE_DOWN
++enum slide_action {
++    SLIDE_LEFT, SLIDE_UP, SLIDE_RIGHT, SLIDE_DOWN
 +};
 +
-+float old_x, old_y;
-+int volume_level = 0;
-+int bright_level = 0;
++// 触摸位置
++enum finger_action {
++    IS_PROGRESS, IS_SCREEN_LEFT, IS_SCREEN_RIGHT
++};
 +
-+// 水平方向
-+static int check_horizontal_direction(float touch_x) {
++int volume_level = -1;
++int max_volume_level = 0;
++int brightness_level = -1;
++int max_brightness_level = 0;
++// 设置临界值
++float critical_value = 1.5f;
++// 按下屏幕时的开始坐标
++float start_x, start_y;
 +
-+    if(touch_x < old_x) {
-+        old_x = touch_x;
-+        return MOVE_LEFT;
-+    } else {
-+        old_x = touch_x;
-+        return MOVE_RIGHT;
-+    }
++// 滑动方向标志
++bool is_slide_vertical = false;
++bool is_slide_horizontal = false;
++
++// 计算角度，判断滑动方向
++static float calcu_slide_angle(float finger_x, float finger_y) {
++    float x = finger_x - start_x;
++    float y = finger_y - start_y;
++    
++    // -45° -> 45°   水平滑动
++    // 45° -> 135°   垂直滑动
++    // 135° -> -135°  水平滑动
++    // -135° -> -45°  垂直滑动
++    float angle = atan2(y, x) * 180 / M_PI;
++    
++    return angle;
 +}
 +
-+// 垂直方向
-+static int check_vertical_direction(float touch_y) {
 +
-+    if(touch_y < old_y) {
-+        old_y = touch_y;
-+        return MOVE_UP;
-+    } else {
-+        old_y = touch_y;
-+        return MOVE_DOWN;
++// 判断在屏幕上滑动的方向
++static int slide_direction(float finger_x, float finger_y, float dx, float dy) {
++    
++    if((fabsf(dy) > fabsf(dx) || fabsf(finger_y - start_y) >= fabsf(finger_x - start_x))
++        && !is_slide_horizontal) {
++        // 垂直方向
++        is_slide_vertical = true;
++        if(dy < 0 && fabsf(dy) >= critical_value) {
++            // 向上滑动
++            return SLIDE_UP;
++        } else if(dy > 0 && fabsf(dy) >= critical_value) {
++            // 向下滑动
++            return SLIDE_DOWN;
++        }
++    } else if((fabsf(dx) > fabsf(dy) || fabsf(finger_x - start_x) >= fabsf(finger_y - start_y))
++        && !is_slide_vertical){
++        // 水平方向
++        is_slide_horizontal = true;
++        if(dx < 0 && fabsf(dx) >= critical_value) {
++            // 向左滑动
++            return SLIDE_LEFT;
++        } else if(dx > 0 && fabsf(dx) >= critical_value) {
++            // 向右滑动
++            return SLIDE_RIGHT;
++        }
 +    }
++    
++    return UNKNOWN;
++}
++
++// 判断在屏幕上触摸的位置
++static int finger_position(float finger_x, float finger_y) {
++    if(finger_x >= 0 && finger_x <= screen_width
++            && finger_y >= bar_start_y - 100 && finger_y <= bar_end_y + 100 ) {
++        // 进度条
++        return IS_PROGRESS;
++    } else if(finger_x >= 0 && finger_x < screen_width / 2) {
++        // 屏幕左侧
++        return IS_SCREEN_LEFT;
++    } else if(finger_x > screen_width / 2 && finger_x <= screen_width) {
++        // 屏幕右侧
++        return IS_SCREEN_RIGHT;
++    }
++    
++    return UNKNOWN;
++}
++
++// 计算亮度
++static int calcu_brightness_level(float finger_x, float finger_y, float dx, float dy){
++#ifdef __ANDROID__
++    if(brightness_level == -1){
++        brightness_level = SDL_AndroidGetBrightness();
++        // 亮度转换为[0..100]
++        brightness_level = (int)(brightness_level * 100 / max_brightness_level);
++    }
++#else
++    brightness_level = SDL_GetWindowBrightness(window);
++#endif
++
++    int direction = slide_direction(finger_x, finger_y, dx, dy);
++    
++    if(direction == SLIDE_UP) {
++        // 向上滑动增加亮度
++        ++brightness_level;
++        if(brightness_level > 100) brightness_level = 100;
++    } else if(direction == SLIDE_DOWN) {
++        // 向下滑动减少亮度
++        --brightness_level;
++        if(brightness_level < 1) brightness_level = 1;
++    } 
++        
++    sprintf(brightness_percent, "b:%d", brightness_level);
++    
++    // 计算亮度[0..100]转换到[0..max_brightness_level]
++    return (int)(brightness_level * max_brightness_level / 100);
 +}
 +
 +// 设置亮度
 +//SDL_SetWindowBrightness(window, value) not support android
-+static void set_brightness_level(float touch_x, float touch_y) {
-+    if(touch_x >= 0 && touch_x < screen_width / 2) {
-+        is_changed_bright = true;
-+#ifdef __ANDROID__
-+        if(bright_level == 0)
-+            bright_level = SDL_AndroidGetBrightness();
-+#else
-+        bright_level = SDL_GetWindowBrightness(window);
-+#endif
-+        if(check_vertical_direction(touch_y) == MOVE_UP) {
-+            // 向上滑动增加亮度
-+            ++bright_level;
-+            if(bright_level > 100) bright_level = 100;
-+        } else {
-+            // 向下滑动减少亮度
-+            --bright_level;
-+            // 最低亮度5
-+            if(bright_level < 5) bright_level = 5;
-+        }
-+
-+        sprintf(curr_bright, "%d", bright_level);
++static void set_brightness_level(int brightness) {
 +
 +#ifdef __ANDROID__
-+        // 调用android方法设置亮度
-+        SDL_AndroidSetBrightness(bright_level);
++    // 调用Android JNI方法设置亮度
++    SDL_AndroidSetBrightness(brightness);
 +#else
-+        // 调用SDL2方法设置亮度
-+        if(SDL_SetWindowBrightness(window, bright_level) < 0) {
-+            LOGE(program_name, "%s\n", SDL_GetError());
-+        }
-+#endif
++    // 调用SDL2方法设置亮度
++    if(SDL_SetWindowBrightness(window, brightness) < 0) {
++        LOGE(program_name, "%s\n", SDL_GetError());
 +    }
++#endif
 +}
 +
++// 计算音量
++static int calcu_volume_level(float finger_x, float finger_y, float dx, float dy){
++    // 当volume_level为-1时，才调用SDL_AndroidGetVolume()方法，保证这个方法只会调用一次
++    // volume_level为全局变量，保存了当前的音量值，后续无需再通过SDL_AndroidGetVolume方法获取音量
++    if(volume_level == -1) {
++        volume_level = SDL_AndroidGetVolume();
++        // 音量转换为[0..100]
++        volume_level = (int)(volume_level * 100 / max_volume_level);
++    }
++    
++    int direction = slide_direction(finger_x, finger_y, dx, dy);
++    
++    if(direction == SLIDE_UP) {
++        // 向上滑动增加音量
++        ++volume_level;
++        if(volume_level > 100) 
++            volume_level = 100;
++    } else if(direction == SLIDE_DOWN) {
++        // 向下滑动减少音量
++        --volume_level;
++        if(volume_level < 0) 
++            volume_level = 0;
++    }
++    
++    sprintf(volume_percent, "v:%d", volume_level);
++    // 计算音量[0..100]转换到[0..max_volume_level]
++    return volume_level * max_volume_level / 100;
++}
 +
 +// 设置音量
-+static void set_volume_level(VideoState *stream, float touch_x, float touch_y) {
-+    if(touch_x > screen_width / 2 && touch_x <= screen_width) {
-+        is_changed_volume = true;
-+        //int volume_level = av_clip(stream->audio_volume, 0, 100);
++static void set_volume_level(VideoState *stream, int volume) {
++    //int volume_level = av_clip(stream->audio_volume, 0, 100);
 +
-+        // 当volume_level为0时，才调用SDL_AndroidGetVolume()方法
-+        // SDL_AndroidGetVolume方法在[0..100]范围内，只会调用一次
-+        if(volume_level == 0)
-+            volume_level = SDL_AndroidGetVolume();
-+
-+        if(check_vertical_direction(touch_y) == MOVE_UP) {
-+            // 向上滑动增加音量
-+            ++volume_level;
-+            if(volume_level > 100) volume_level = 100;
-+        } else {
-+            // 向下滑动减少音量
-+            --volume_level;
-+            if(volume_level < 0) volume_level = 0;
-+        }
-+
-+        sprintf(curr_volume, "%d", volume_level);
-+
-+        // stream->audio_volume为音频音量，不是系统音量
-+        // 比如当前系统音量为50，那么audio_volume音量的范围就为[0..50]
-+        // 也就是说audio_volume的最大值，为当前的系统音量
-+        if(stream->audio_volume != startup_volume)
-+            stream->audio_volume = volume_level;
-+
-+        SDL_AndroidSetVolume(volume_level);
-+    }
++    // stream->audio_volume为音频音量，不是系统音量
++    // 比如当前系统音量为50，那么audio_volume音量的范围就为[0..50]
++    // 也就是说audio_volume的最大值，为当前的系统音量
++    if(stream->audio_volume != startup_volume)
++        stream->audio_volume = volume;
++    // 调用Android JNI方法设置亮度
++    SDL_AndroidSetVolume(volume);
 +}
 +
 +
-+// 计算当前进度值
-+static void calcu_curr_progress(float touch_x, float touch_y, double *frac) {
-+    // 拖动进度条
-+    if(touch_x >= start_x - 20 && touch_x <= end_x + 20
-+            && touch_y >= start_y - 80 && touch_y <= end_y + 80) {
-+        is_seek_progress = true;
-+        is_play_finished = false;
-+
-+        curr_end_x = touch_x;
-+        if(curr_end_x < start_x)
-+            curr_end_x = start_x;
-+        else if(curr_end_x > end_x)
-+            curr_end_x = end_x;
-+
-+        *frac = ((curr_end_x - start_x)  / (end_x - start_x));
-+        set_curr_duration((*frac) * total_time);
++// 计算seek值
++static int calcu_seek_interval(dx, dy) {
++    float interval = 0.0f;
++    
++    if(dx < 0) {
++        interval = dx;
++        if(interval < -critical_value) 
++            interval = -critical_value;
++    } else {
++        interval = dx;
++        if(interval > critical_value) 
++            interval = critical_value;
 +    }
++    
++    return interval;
++}
++
++// 计算当前进度百分比值
++static float calcu_progress_percent(float finger_x, float finger_y) {
++    curr_bar_x = finger_x;
++    
++    if(curr_bar_x < bar_start_x)
++        curr_bar_x = bar_start_x;
++    else if(curr_bar_x > bar_end_x)
++        curr_bar_x = bar_end_x;
++
++    return (curr_bar_x - bar_start_x)  / (bar_end_x - bar_start_x);
 +}
 +
 +
-+//typedef struct paramter {
-+//    VideoState *stream;
-+//    double frac;
-+//} paramter;
++// 定义刷新事件
++#define REFRESH_EVENT	(SDL_USEREVENT + 1)
++
++// 清空字符串
++static void clear_text(char *text) {
++    if(text != NULL) {
++        memset(text, 0, strlen(text));
++    }
++}
++
++// 定时器回调函数
++static Uint32 callback(Uint32 interval, void *param) {
++
++    // 如果返回interval, 再过指定的interval，会继续调用这个函数
++    // 返回0则不会继续调用此函数
++    clear_text(paused_text);
++    
++    // 不能在子线程里更新UI
++    //video_display((VideoState *)param);
++    
++    // 通过发送一个SDL_Event去更新UI
++    SDL_Event *event = (SDL_Event*)param;
++    event->type = REFRESH_EVENT;
++    SDL_PushEvent(event);
++    
++    return 0;
++}
++
++// ================= seek thread ====================
++
++SDL_Thread *seek_thread = NULL;
++SDL_mutex *mutex = NULL;
++SDL_cond *cond = NULL;
++SDL_TimerID timer;
++
++bool is_seek_finished = false;
++
++typedef struct stream_params {
++    VideoState *stream;
++    SDL_Event *event;
++    float incr;
++} stm_params_t;
++
++// 在子线程里进行seek操作
++static int seek_stream(void *data){
++    stm_params_t *params = (stm_params_t*)data;
++    float pos = 0.0f;
++    
++    SDL_LockMutex(mutex);
++    
++    while(!is_seek_finished) {
++        // 等待条件变量
++        SDL_CondWait(cond, mutex);
++        
++        pos = get_master_clock(params->stream);
++                    
++        if(isnan(pos))
++            pos = (double)params->stream->seek_pos / AV_TIME_BASE;
++        pos += params->incr;
++                    
++        if(params->stream->ic->start_time != AV_NOPTS_VALUE && pos < params->stream->ic->start_time / (double)AV_TIME_BASE)
++            pos = params->stream->ic->start_time / (double)AV_TIME_BASE;
++        stream_seek(params->stream, (int64_t)(pos * AV_TIME_BASE), (int64_t)(params->incr * AV_TIME_BASE), 0);
++        
++        // 设置当前时长
++        set_current_duration(pos);
++        
++        format_time(pos, seek_pos_text);
++        
++        char total_duration_text[10];    
++        format_time(total_duration, total_duration_text);
++        
++        strcat(seek_pos_text, " / ");
++        strcat(seek_pos_text, total_duration_text);
++        
++        // 发送刷新事件
++        SDL_Event *event = params->event;
++        event->type = REFRESH_EVENT;
++        SDL_PushEvent(event);
++        
++        //LOGI(program_name, "%s\n", seek_pos_text);
++    }
++    
++    SDL_UnlockMutex(mutex);
++
++    return (int)pos;
++}
 +
 +
-+//static void seek_stream(void *data){
-+//    struct paramter *params = (struct paramter*)data;
-+//
-+//    int64_t ts = params->frac * params->stream->ic->duration;
-+//    if (params->stream->ic->start_time != AV_NOPTS_VALUE)
-+//    ts += params->stream->ic->start_time;
-+//    stream_seek(params->stream, ts, 0, 0);
-+//}
-+
-+
++// ============================================================
 +
  /* handle an event sent by the GUI */
  static void event_loop(VideoState *cur_stream) {
      SDL_Event event;
      double incr, pos, frac;
-+    float touch_x, touch_y;
-+    Uint32 curr_timestamp = 0;
-+    Uint32 last_timestamp = 0;
-+    //SDL_Thread *seek_thread = NULL;
++    float finger_x, finger_y;
++    Uint32 start_timestamp = 0;
++    Uint32 end_timestamp = 0;
++    // SDL定时器
++    SDL_TimerID timer;
++    // 线程函数参数
++    stm_params_t params;
++    mutex = SDL_CreateMutex();
++    cond = SDL_CreateCond();
  
      for (;;) {
          double x;
          refresh_loop_wait_event(cur_stream, &event);
          switch (event.type) {
 +        case SDL_FINGERDOWN: // 触摸按下
-+
-+            touch_x = event.tfinger.x * screen_width;
-+            touch_y = event.tfinger.y * screen_height;
-+            old_x = touch_x;
-+            old_y = touch_y;
-+
-+            curr_timestamp = event.tfinger.timestamp;
-+            if(curr_timestamp - last_timestamp <= 300 && last_timestamp != 0) {
-+                // 双击事件
-+                toggle_pause(cur_stream);
-+                last_timestamp = 0;
-+            } else {
-+                // 单击事件
-+                last_timestamp = curr_timestamp;
++            start_timestamp = event.tfinger.timestamp;
++            start_x = finger_x = event.tfinger.x * screen_width;
++            start_y = finger_y = event.tfinger.y * screen_height;
++            
++            if(finger_position(finger_x, finger_y) == IS_PROGRESS 
++                && is_show_component && total_duration > 0) {
++                is_seeking_progress = true;
 +                // 计算当前进度值
-+                calcu_curr_progress(touch_x, touch_y, &frac);
-+            }
++                frac = calcu_progress_percent(finger_x, finger_y);
++                set_current_duration(frac * total_duration);
++                // 播放完成后，拖动进度条可以继续进行绘制
++                if((!cur_stream->audio_st || (cur_stream->auddec.finished == cur_stream->audioq.serial && frame_queue_nb_remaining(&cur_stream->sampq) == 0)) 
++                    && (!cur_stream->video_st || (cur_stream->viddec.finished == cur_stream->videoq.serial && frame_queue_nb_remaining(&cur_stream->pictq) == 0))) {
++                    goto refresh;
++                }
++            } 
++            
 +            break;
 +        case SDL_FINGERMOTION: // 触摸移动
-+            touch_x = event.tfinger.x * screen_width;
-+            touch_y = event.tfinger.y * screen_height;
-+            // 计算当前进度值
-+            if(!is_changed_bright && !is_changed_volume)
-+                calcu_curr_progress(touch_x, touch_y, &frac);
++            finger_x = event.tfinger.x * screen_width;
++            finger_y = event.tfinger.y * screen_height;
++            
++            float dx = event.tfinger.dx * screen_width;
++            float dy = event.tfinger.dy * screen_height;
++            
++            // 拖动进度条进行seek操作
++            if(finger_position(finger_x, finger_y) == IS_PROGRESS 
++                && is_show_component && total_duration > 0) { // 当前滑动的位置是进度条
++                is_seeking_progress = true;
++                // 计算当前进度值
++                frac = calcu_progress_percent(finger_x, finger_y);
++                set_current_duration(frac * total_duration);
++                
++                // 播放完成后，拖动进度条可以继续进行绘制
++                // video_display在视频暂停或者播放完成后，不会再继续调用
++                // 所以需要在滑动过程中，手工调用进行UI更新
++                if((!cur_stream->audio_st || (cur_stream->auddec.finished == cur_stream->audioq.serial && frame_queue_nb_remaining(&cur_stream->sampq) == 0)) 
++                    && (!cur_stream->video_st || (cur_stream->viddec.finished == cur_stream->videoq.serial && frame_queue_nb_remaining(&cur_stream->pictq) == 0))) {
++                    goto refresh;
++                }
++                
++            } else if(finger_position(finger_x, finger_y) == IS_SCREEN_LEFT) { // 当前滑动的位置是屏幕左侧
++               
++                int direction = slide_direction(finger_x, finger_y, dx, dy);
++               
++                if(is_slide_vertical) { // 垂直方向滑动
++                    // 设置亮度
++                    clear_text(volume_percent);
++                    int brightness = calcu_brightness_level(finger_x, finger_y, dx, dy);
++                    set_brightness_level(brightness);
++                    
++                } else if(is_slide_horizontal && total_duration > 0) { // 水平方向滑动
++                    // 滑动屏幕进行seek
++                    // 媒体文件总时长大于0，才可以进行seek
++                    // 如果是流媒体则可能无法获取到总时长，total_duration就等于0
++                    incr = calcu_seek_interval(dx, dy);
++                    goto do_seek;
++                }
++                
++            } else if(finger_position(finger_x, finger_y) == IS_SCREEN_RIGHT) { // 当前滑动的位置是屏幕右侧
++                
++                int direction = slide_direction(finger_x, finger_y, dx, dy);
++                
++                if(is_slide_vertical) { // 垂直方向滑动
++                    // 设置音量
++                    clear_text(brightness_percent);
++                    int volume = calcu_volume_level(finger_x, finger_y, dx, dy);
++                    set_volume_level(cur_stream, volume);
++                    
++                } else if (is_slide_horizontal && total_duration > 0) { // 水平方向滑动
++                    // 滑动屏幕进行seek
++                    // 媒体文件总时长大于0，才可以进行seek
++                    // 如果是流媒体则可能无法获取到总时长，total_duration就等于0
++                    incr = calcu_seek_interval(dx, dy);
++                    goto do_seek;
++                }
++            } 
 +
-+            // 没有拖动进度条，才允许改变亮度和音量
-+            if(!is_seek_progress) {
-+                // 设置屏幕亮度
-+                set_brightness_level(touch_x, touch_y);
-+                // 设置音量
-+                set_volume_level(cur_stream, touch_x, touch_y);
-+            }
++            // 暂停之后，当滑动屏幕时可以继续进行绘制
++            if(cur_stream->paused)
++                goto refresh;
++                
 +            break;
 +        case SDL_FINGERUP: // 触摸抬起
-+
-+            if(is_seek_progress) {
++            end_timestamp = event.tfinger.timestamp;
++            finger_x = event.tfinger.x * screen_width;
++            finger_y = event.tfinger.y * screen_height;
++            
++            if(finger_position(finger_x, finger_y) == IS_PROGRESS 
++                && is_show_component && total_duration > 0) {
 +                // 创建线程进行seek, 因为在触摸滑动(SDL_FINGERMOTION)中进行seek操作会卡帧
-+                //struct paramter params = {cur_stream, frac};
++                //stm_params_t params = {cur_stream, frac};
 +                //seek_thread = SDL_CreateThread(seek_stream, "seek thread", (void*)&params);
 +
 +                int64_t ts = frac * cur_stream->ic->duration;
 +                if(cur_stream->ic->start_time != AV_NOPTS_VALUE)
 +                    ts += cur_stream->ic->start_time;
 +                stream_seek(cur_stream, ts, 0, 0);
++            } 
++            
++            if(strcmp(volume_percent, "") == 0 
++                && strcmp(brightness_percent, "") == 0 
++                && end_timestamp - start_timestamp <= 200 
++                && !is_seeking_progress && !is_slide_vertical && !is_slide_horizontal) {
++                // 改变状态
++                is_show_component = !is_show_component;
 +            }
-+
-+            is_seek_progress = false;
-+            is_changed_volume = false;
-+            is_changed_bright = false;
-+
++            
++            // 重置所有状态标志
++            is_seeking_progress = false;
++            is_slide_vertical = false;
++            is_slide_horizontal = false;
++            
++            // 唤醒等待的线程，结束seek操作
++            SDL_LockMutex(mutex);
++            is_seek_finished = true;
++            SDL_CondSignal(cond);
++            SDL_UnlockMutex(mutex);
++            
++            // 等待线程结束
++            SDL_WaitThread(seek_thread, NULL);
++            seek_thread = NULL;
++            //SDL_DestroyCond(cond);
++            // 在此处销毁mutex，视频会可能会卡帧
++            //SDL_DestroyMutex(mutex);
++            
++            // 清空文本
++            clear_text(volume_percent);
++            clear_text(brightness_percent);
++            clear_text(seek_pos_text);
++            
++            // 暂停之后，当滑动屏幕时可以继续进行绘制
++            if(cur_stream->paused) 
++                goto refresh;
++            
++            break;
++        case REFRESH_EVENT: // 自定义刷新事件
++refresh:    // 刷新 
++            video_display(cur_stream);
 +            break;
          case SDL_KEYDOWN:
              if (exit_on_keydown || event.key.keysym.sym == SDLK_ESCAPE || event.key.keysym.sym == SDLK_q) {
                  do_exit(cur_stream);
-@@ -3663,7 +4148,15 @@
+@@ -3300,8 +4116,12 @@
+                         incr *= 180000.0;
+                     pos += incr;
+                     stream_seek(cur_stream, pos, incr, 1);
++                    //LOGI(program_name, "%s\n", "seek_by_bytes");
+                 } else {
++                    
++                    /**
+                     pos = get_master_clock(cur_stream);
++                    
+                     if (isnan(pos))
+                         pos = (double)cur_stream->seek_pos / AV_TIME_BASE;
+                     pos += incr;
+@@ -3305,9 +4125,31 @@
+                     if (isnan(pos))
+                         pos = (double)cur_stream->seek_pos / AV_TIME_BASE;
+                     pos += incr;
++                    
+                     if (cur_stream->ic->start_time != AV_NOPTS_VALUE && pos < cur_stream->ic->start_time / (double)AV_TIME_BASE)
+                         pos = cur_stream->ic->start_time / (double)AV_TIME_BASE;
+                     stream_seek(cur_stream, (int64_t)(pos * AV_TIME_BASE), (int64_t)(incr * AV_TIME_BASE), 0);
++                    */
++                    
++                    is_seeking_progress = true;
++                    is_seek_finished = false;
++                    
++                    params.stream = cur_stream;
++                    params.incr = incr;
++                    params.event = &event;
++                    
++                    if(seek_thread == NULL) {                      
++                        //mutex = SDL_CreateMutex();
++                        //cond = SDL_CreateCond();
++                        seek_thread = SDL_CreateThread(seek_stream, "Seek Thread", &params);
++                    }
++                    
++                    // 唤醒等待的线程，开始进行seek操作
++                    SDL_LockMutex(mutex);
++                    SDL_CondSignal(cond);
++                    SDL_UnlockMutex(mutex);
++                    
++                    //LOGI(program_name, "pos = %f\n", pos);                 
+                 }
+                 break;
+             default:
+@@ -3321,11 +4163,26 @@
+             }
+             if (event.button.button == SDL_BUTTON_LEFT) {
+                 static int64_t last_mouse_left_click = 0;
+-                if (av_gettime_relative() - last_mouse_left_click <= 500000) {
+-                    toggle_full_screen(cur_stream);
+-                    cur_stream->force_refresh = 1;
++                if(av_gettime_relative() - last_mouse_left_click <= 300000) {
++                    
++                    clear_text(paused_text);
++                    //移除定时器
++                    SDL_RemoveTimer(timer);
++                    
++                    // 双击暂停
++                    toggle_pause(cur_stream);
+                     last_mouse_left_click = 0;
++                    
++                    if(cur_stream->paused) {
++                        strcpy(paused_text, "PAUSED");
++                        // 添加定时器
++                        timer = SDL_AddTimer(2000, callback, &event);
++                    }
+                 } else {
++                    // 单击全屏
++                    //toggle_full_screen(cur_stream);
++                    //cur_stream->force_refresh = 1;
++                    //LOGI(program_name, "one click\n");
+                     last_mouse_left_click = av_gettime_relative();
+                 }
+             }
+@@ -3384,6 +4241,12 @@
+             break;
+         case SDL_QUIT:
+         case FF_QUIT_EVENT:
++            // destroy mutex and cond
++            if(mutex != NULL && cond != NULL) {
++                SDL_DestroyCond(cond);
++                SDL_DestroyMutex(mutex);
++            }
++        
+             do_exit(cur_stream);
+             break;
+         default:
+@@ -3661,7 +4525,15 @@
              flags |= SDL_WINDOW_BORDERLESS;
          else
              flags |= SDL_WINDOW_RESIZABLE;
@@ -697,13 +1120,18 @@
          SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
          if (window) {
              renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-@@ -3682,6 +4175,10 @@
+@@ -3680,6 +4552,15 @@
          }
      }
  
 +    // 初始化显示时间字体文件
 +    init_font(font_path, font_size);
-+    SDL_AndroidLogPrint(LOG_INFO, program_name, "hello ffplay %d\n", font_size);
++    // 最大亮度
++    max_brightness_level = SDL_AndroidGetMaxBrightness();
++    // 最大音量
++    max_volume_level = SDL_AndroidGetMaxVolume();
++    
++    SDL_AndroidLogPrint(LOG_INFO, program_name, "Hello ffplay %d\n", font_size);
 +
      is = stream_open(input_filename, file_iformat);
      if (!is) {

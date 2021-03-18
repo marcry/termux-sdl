@@ -1,5 +1,5 @@
 --- /sdcard/download/SDLActivity.java	2021-03-11 13:05:32.354750682 +0800
-+++ app/src/main/java/org/libsdl/app/SDLActivity.java	2021-03-11 13:04:36.418078443 +0800
++++ app/src/main/java/org/libsdl/app/SDLActivity.java	2021-03-17 16:25:08.931727659 +0800
 @@ -4,13 +4,16 @@
  import android.app.AlertDialog;
  import android.app.Dialog;
@@ -58,7 +58,7 @@
  
      public static boolean mIsResumedCalled, mHasFocus;
      public static final boolean mHasMultiWindow = (Build.VERSION.SDK_INT >= 24);
-@@ -109,6 +122,259 @@
+@@ -109,6 +122,275 @@
      protected static SDLGenericMotionListener_API12 mMotionListener;
      protected static HIDDeviceManager mHIDDeviceManager;
  
@@ -102,21 +102,25 @@
 +    };
 +
 +
-+    // set brightness range[0..100]
-+    // called by JNI from SDL
++    // set brightness range[0..maxBrightness]
 +    public static void setRealBrightness(int brightness) {
 +
 +        WindowManager.LayoutParams lp = mSingleton.getWindow().getAttributes();
 +
 +        int maxBrightness = getMaxBrightness();
++        
++        if(brightness < 0) 
++            brightness =0;
++        else if(brightness > maxBrightness)
++            brightness = maxBrightness;
 +
-+        // range[0..100] brightness * maxBrightness / 100
-+        lp.screenBrightness = Float.valueOf(brightness * maxBrightness / 100) * (1f / maxBrightness);
++        lp.screenBrightness = 1.0f * brightness / maxBrightness;
 +        mSingleton.getWindow().setAttributes(lp);
 +    }
 +
 +
 +    // cannot update the ui in the child thread
++    // this method called by SDL from JNI
 +    public static void setBrightness(int brightness) {
 +        Message msg = mHandler.obtainMessage(SET_BRIGHTNESS);
 +        msg.obj = brightness;
@@ -132,12 +136,11 @@
 +        resolver.notifyChange(uri, null);
 +    }
 +
-+
 +    // get current brightness range[0..100] 
-+    // called by JNI from SDL
++    // this method called by SDL from JNI
 +    public static int getBrightness() {
 +        int brightness = 0;
-+        int maxBrightness = getMaxBrightness();
++       
 +        ContentResolver resolver = mSingleton.getContentResolver();
 +        try {
 +            brightness = android.provider.Settings.System.getInt(resolver, Settings.System.SCREEN_BRIGHTNESS);
@@ -145,8 +148,8 @@
 +        } catch(Exception e) {
 +            e.printStackTrace();
 +        }
-+        // [0..100]range
-+        return brightness / maxBrightness * 100;
++        
++        return brightness ;
 +    }
 +
 +    // get the maximum brightness, default 255
@@ -196,27 +199,40 @@
 +    }
 +
 +
-+    // set volume range[0..100] 
-+    // called by JNI from SDL
++    // set volume range[0..maxVolume] 
++    // this method called by SDL from JNI
 +    public static void setVolume(int volume) {
 +        if(mAudioManager != null) {
 +            //Log.i(TAG, "min volume: " + mAudioManager.getStreamMinVolume(AudioManager.STREAM_MUSIC));
 +            //Log.i(TAG, "max volume: " + mAudioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
 +            int maxVolume = mAudioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-+            mAudioManager.setStreamVolume(AudioManager.STREAM_MUSIC, volume * maxVolume / 100, AudioManager.FLAG_PLAY_SOUND);
++            if(volume < 0) 
++                volume = 0;
++            else if(volume > maxVolume) 
++                volume = maxVolume;
++            
++            mAudioManager.setStreamVolume(AudioManager.STREAM_MUSIC, volume, AudioManager.FLAG_PLAY_SOUND);
 +        }
 +    }
 +
-+    // get current volume range[0..100] 
-+    // called by JNI from SDL
++    // get current volume range[0..maxVolume] 
++    // this method called by SDL from JNI
 +    public static int getVolume() {
++        int currVolume = 0;
 +        if(mAudioManager != null) {
-+            int currVolume =  mAudioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
-+            int maxVolume = mAudioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
++            currVolume =  mAudioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
 +            //Log.i(TAG, "currVolume: " + currVolume);
-+            return currVolume / maxVolume * 100;
 +        }
-+        return 0;
++        return currVolume;
++    }
++    
++    // this method called by SDL from JNI
++    public static int getMaxVolume(){
++        int maxVolume = 0;
++        if(mAudioManager != null) {
++            maxVolume = mAudioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
++        }
++        return maxVolume;
 +    }
 +
 +    // get log from SDL2
@@ -318,7 +334,7 @@
      // This is what SDL runs in. It invokes SDL_main(), eventually
      protected static Thread mSDLThread;
  
-@@ -136,7 +402,7 @@
+@@ -136,7 +418,7 @@
          if (libraries.length > 0) {
              library = "lib" + libraries[libraries.length - 1] + ".so";
          } else {
@@ -327,7 +343,7 @@
          }
          return getContext().getApplicationInfo().nativeLibraryDir + "/" + library;
      }
-@@ -161,15 +427,16 @@
+@@ -161,15 +443,16 @@
          return new String[] {
              "hidapi",
              "SDL2",
@@ -349,7 +365,7 @@
      public void loadLibraries() {
          for (String lib : getLibraries()) {
              SDL.loadLibrary(lib);
-@@ -204,6 +471,53 @@
+@@ -204,6 +487,53 @@
          mCurrentNativeState = NativeState.INIT;
      }
  
@@ -403,7 +419,7 @@
      // Setup
      @Override
      protected void onCreate(Bundle savedInstanceState) {
-@@ -234,23 +549,7 @@
+@@ -234,23 +565,7 @@
  
          if (mBrokenLibraries) {
              mSingleton = this;
@@ -428,7 +444,7 @@
              return;
          }
  
-@@ -264,6 +563,28 @@
+@@ -264,6 +579,28 @@
          mSingleton = this;
          SDL.setContext(this);
  
@@ -457,7 +473,7 @@
          mClipboardHandler = new SDLClipboardHandler_API11();
  
          mHIDDeviceManager = HIDDeviceManager.acquire(this);
-@@ -290,6 +611,7 @@
+@@ -290,6 +627,7 @@
          if (intent != null && intent.getData() != null) {
              String filename = intent.getData().getPath();
              if (filename != null) {
@@ -465,7 +481,7 @@
                  Log.v(TAG, "Got filename: " + filename);
                  SDLActivity.onNativeDropFile(filename);
              }
-@@ -432,11 +754,15 @@
+@@ -432,11 +770,15 @@
      protected void onDestroy() {
          Log.v(TAG, "onDestroy()");
  
@@ -482,7 +498,7 @@
          if (SDLActivity.mBrokenLibraries) {
              super.onDestroy();
              return;
-@@ -456,7 +782,7 @@
+@@ -456,7 +798,7 @@
          }
  
          SDLActivity.nativeQuit();
