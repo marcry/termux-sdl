@@ -14,7 +14,7 @@ on:
 
 # all jobs for workflow
 jobs:
-  # jobs for test
+  # jobs for tests
   test:
     name: Run Unit Test
     runs-on: ubuntu-latest
