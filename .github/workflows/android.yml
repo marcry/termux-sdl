@@ -9,6 +9,8 @@ on:
     # add tag (git tag -a v2.0 -m "release 2.0 version")
     # push tag (git push origin --tag)
       - 'v*' # Push events to matching v*, i.e. v1.0, v2.0.5
+    paths:
+      - '.github/workflows/android.yml'
 
 # all jobs for workflow
 jobs:
@@ -53,6 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     # dependent build job
     needs: [build] 
+    
     # git tag -a v1.0 -m "release 1.0 version"
     # git push origin –-tags
     if: contains(github.ref, 'tags/')
