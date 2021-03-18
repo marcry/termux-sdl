@@ -42,6 +42,7 @@ cd termux-sdl
 git tag -a v3.0 -m "release 3.0 version" 
 
 # push tag to trigger the github actions
+# or you can modify the workflow file to change the trigger conditions
 git push origin --tag
 
 ```
