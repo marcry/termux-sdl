@@ -42,7 +42,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           # set the archiver name 
-          name: app-debug
+          name: termux-sdl-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           
   # jobs for release apk
@@ -68,7 +68,7 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           # download archiver file 
-          name: app-debug
+          name: termux-sdl-debug
           
       # create release
       - name: Create Release
