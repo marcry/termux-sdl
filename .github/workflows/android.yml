@@ -104,7 +104,7 @@ jobs:
           # 设置时区，默认是格林尼治时间
           # TZ: Asia/Shanghai
         with:
-          tag_name: $
+          tag_name: ${{ steps.prepare_release.outputs.tag_name }}
           release_name: Release $ by zfb
           draft: false
           prerelease: false
@@ -117,7 +117,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: $ 
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./termux-sdl-debug-$.apk
           asset_name: termux-sdl-debug-$.apk
           asset_content_type: application/vnd.android.package-archive
