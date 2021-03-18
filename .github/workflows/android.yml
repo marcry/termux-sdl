@@ -1,4 +1,4 @@
-name: Auto build debug apk
+name: Android CI
 
 on:
   push:
@@ -50,7 +50,7 @@ jobs:
     name: Deploy Apk
     runs-on: ubuntu-latest
     # dependent build job
-    needs: build 
+    needs: [build] 
     # git tag -a v1.0 -m "release 1.0 version"
     # git push origin –-tags
     if: contains(github.ref, 'tags/')
@@ -74,7 +74,7 @@ jobs:
       - name: Create Release
         id: create_release
         # check tag_name
-        if: steps.prepare_release.outputs.tag_name
+        if: ${{ steps.prepare_release.outputs.tag_name }}
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -88,7 +88,7 @@ jobs:
       - name: Upload Apk
         id: upload-release-asset 
         # check upload_url
-        if: steps.create_release.outputs.upload_url
+        if: ${{ steps.create_release.outputs.upload_url }}
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -97,3 +97,16 @@ jobs:
           asset_path: app-debug.apk 
           asset_name: termux-sdl-debug-${{ steps.prepare_release.outputs.tag_name }}.apk 
           asset_content_type: application/vnd.android.package-archive
+          
+  # delete artifact files
+  clean:
+    needs: [build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: Delete Artifacts
+      env:
+        FOR_WEBHOOKS_SECRET: ${{ secrets.FOR_WEBHOOKS_SECRET }}
+      run: |
+        echo "::add-mask::$FOR_WEBHOOKS_SECRET"
+        curl --verbose --fail --show-error --location --request POST "https://api.github.com/repos/$GITHUB_REPOSITORY/dispatches" --header "Authorization: token $FOR_WEBHOOKS_SECRET" --header 'Content-Type: application/json' --header 'Accept: application/vnd.github.everest-preview+json' --data-raw "{ \"event_type\": \"delete_all_artifacts\", \"client_payload\": {\"parent_runid\": \"$GITHUB_RUN_ID\", \"parent_repo\": \"$GITHUB_REPOSITORY\"} }"
