@@ -42,7 +42,7 @@ jobs:
         run: bash ./gradlew test --stacktrace
 
   apk:
-    name: Generate APK
+    name: Generate Apk
     runs-on: ubuntu-latest
 
     steps:
@@ -51,21 +51,11 @@ jobs:
         uses: actions/setup-java@v1
         with:
           java-version: 1.8
-      - name: Build debug APK
+      - name: Build Debug Apk
         run: bash ./gradlew assembleDebug --stacktrace
-      # 利用upload-artifact实现build结果的保存（可以在Actions的控制台下载压缩文件）
-      - name: Upload APK
-        uses: actions/upload-artifact@v2
-        with:
-          # 设置压缩文件的名称，在控制台会得到termux-sdl-debug.zip文件的下载链接
-          # 下载后解压缩，里面直接可以看到app-debug.apk，没有其他东西
-          name: termux-sdl-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
-
+      
   deploy:
     name: Upload Release Asset
-    # 依赖上一个job
-    needs: apk
     runs-on: ubuntu-latest
     # 只在tag时执行，即在自己终端运行以下代码后才会触发
     # git tag -a v0.1.0 -m "release 0.1.0 version"
@@ -80,18 +70,7 @@ jobs:
         run: |
           TAG_NAME=`echo $GITHUB_REF | cut -d / -f3`
           echo ::set-output name=tag_name::$TAG_NAME
-      - name: Download build result for job apk
-        # 只有上一步获取到tag_name才继续，下载前面apk任务里面的termux-sdl-debug.zip文件
-        # 自动解压缩到当前文件夹，自动删除原压缩文件
-        # 多任务之间的数据交换
-        if: steps.prepare_release.outputs.tag_name
-        uses: actions/download-artifact@v2
-        with:
-          name: termux-sdl-debug
-      - shell: bash
-        # 手动更改apk名字 name+version
-        run: |
-          mv app-debug.apk  termux-sdl-debug-${{ steps.prepare_release.outputs.tag_name }}.apk 
+      
       # 发布release，版本号是用户git push的tag里面的版本号，发布的只有代码压缩包（与手动默认发布一致）
       - name: Create Release
         id: create_release
@@ -118,6 +97,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: termux-sdl-debug-${{ steps.prepare_release.outputs.tag_name }}.apk 
+          asset_path: app/build/outputs/apk/debug/app-debug.apk 
           asset_name: termux-sdl-debug-${{ steps.prepare_release.outputs.tag_name }}.apk 
           asset_content_type: application/vnd.android.package-archive
