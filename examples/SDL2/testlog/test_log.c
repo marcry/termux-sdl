@@ -37,7 +37,7 @@ int main(int argc, char *args[]) {
     // sleep 1000s
     SDL_Delay(1000000);
     
-    //SDL_FreeSurface(surface);
+    SDL_FreeSurface(surface);
     SDL_DestroyWindow(win);
     SDL_Quit();
     
