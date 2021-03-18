@@ -89,9 +89,9 @@ jobs:
         with:
           name: termux-sdl-debug
       - shell: bash
-        # 手动更改apk名字
+        # 手动更改apk名字 name+version
         run: |
-          mv app-debug.apk  termux-sdl-debug-$.apk 
+          mv app-debug.apk  termux-sdl-debug-${{ steps.prepare_release.outputs.tag_name }}.apk 
       # 发布release，版本号是用户git push的tag里面的版本号，发布的只有代码压缩包（与手动默认发布一致）
       - name: Create Release
         id: create_release
@@ -105,7 +105,7 @@ jobs:
           # TZ: Asia/Shanghai
         with:
           tag_name: ${{ steps.prepare_release.outputs.tag_name }}
-          release_name: Release $ by zfb
+          release_name: ${{ steps.prepare_release.outputs.tag_name }}
           draft: false
           prerelease: false
       # 这一步是对上一步发布的release文件的补充，调用github api上传一个apk文件
@@ -118,6 +118,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./termux-sdl-debug-$.apk
-          asset_name: termux-sdl-debug-$.apk
+          asset_path: termux-sdl-debug-${{ steps.prepare_release.outputs.tag_name }}.apk 
+          asset_name: termux-sdl-debug-${{ steps.prepare_release.outputs.tag_name }}.apk 
           asset_content_type: application/vnd.android.package-archive
