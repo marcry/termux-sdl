@@ -27,6 +27,19 @@ make run
 </div>
 
 ----
+#### Using Github Actions to auto building debug app
+If you want to use github actions to build debug app.</br>
+please fork this repository, then execute the command as below.
+
+```bash
+# add a tag v2.5 v3.0 ..etc
+git tag -a v3.0 -m "release 3.0 version" 
+
+# push tag to trigger the github actions
+git push origin --tag
+
+```
+----
 
 #### Using ffplay to play video and audio
 
