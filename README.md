@@ -32,6 +32,12 @@ If you want to use github actions to build debug app.</br>
 please fork this repository, then execute the command as below.
 
 ```bash
+# clone your own repository
+git clone https://github.com/your_repository/termux-sdl
+
+# 
+cd termux-sdl
+
 # add a tag v2.5 v3.0 ..etc
 git tag -a v3.0 -m "release 3.0 version" 
 
