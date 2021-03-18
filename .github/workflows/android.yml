@@ -38,11 +38,24 @@ jobs:
       - name: Build Debug Apk
         run: bash ./gradlew assembleDebug --stacktrace
       
-      # jobs for release apk
-      - name: Upload Apk
-      # git tag -a v1.0 -m "release 1.0 version"
-      # git push origin –-tags
-      if: contains(github.ref, 'tags/')
+      # cache apk file
+      - name: Cache Apk
+        id: cache-apk
+        uses: actions/cache@v2
+        with:
+          path: app/build/outputs/apk/debug
+          key: ${{ runner.os }}-apk
+  
+  # jobs for release apk
+  deploy:
+    name: Upload Apk
+    runs-on: ubuntu-latest
+    # dependent build job
+    needs: build 
+    # git tag -a v1.0 -m "release 1.0 version"
+    # git push origin –-tags
+    if: contains(github.ref, 'tags/')
+    steps:
       - name: Prepare Release
         # set id for get output tag_name
         # steps.prepare_release.outputs.tag_name
