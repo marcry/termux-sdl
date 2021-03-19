@@ -2,7 +2,7 @@
 
 This is a termux sdl plugin for compiling and running SDL2 and native app.
 
-#### How to running SDL2 and native program:
+#### How to running SDL2 and native activity program:
 
 ```bash
 # compile examples
