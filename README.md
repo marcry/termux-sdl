@@ -2,7 +2,7 @@
 
 This is a termux sdl plugin for compiling and running SDL2 and native app.
 
-#### How to compiling SDL2 and native program:
+#### How to running SDL2 and native program:
 
 ```bash
 # compile examples
@@ -82,7 +82,7 @@ ffplay -fs -i /sdcard/video/test.mp4
 
 ----
 
-How to use `SDL_AndroidLogPrint` method click [here](https://github.com/Lzhiyong/termux-sdl/blob/master/examples/SDL2/testlog/test_log.c) for example.
+How to use `SDL_AndroidLogPrint` method to print log click [here](https://github.com/Lzhiyong/termux-sdl/blob/master/examples/SDL2/testlog/test_log.c) for example.
 
 <div align="left">
     <img src="./screenshot/ffplay.jpg" width="50%" /><img src="./screenshot/log.jpg" width="50%" />
