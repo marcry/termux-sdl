@@ -3,7 +3,7 @@
 This is a termux sdl plugin for compiling and running SDL2 and native app.
 
 #### How to running SDL2 and native activity program:
-Download the [Termux](https://github.com/termux/termux-app) app, then execute the command `pkg install clang cmake`
+Download the [Termux](https://github.com/termux/termux-app) app, then execute the command `pkg install clang cmake` ..etc
 
 ```bash
 # compile examples
