@@ -121,7 +121,8 @@ public class TermuxSDLActivity extends SDLActivity {
     public void deleteLibFile() {
         try {
             // delete /data/user/0/com.termux.sdl/tmpdir/libxxx.so
-            Files.deleteIfExists(Paths.get(sdlmain));
+            if(sdlmain != null && !sdlmain.isEmpty())
+                Files.deleteIfExists(Paths.get(sdlmain));
         } catch(IOException e) {
             e.printStackTrace();
         }
