@@ -38,6 +38,12 @@ public class TermuxNativeActivity extends Activity {
         finish();
     }
 
+    @Override
+    protected void onNewIntent(Intent intent) {
+        // TODO: Implement this method
+        super.onNewIntent(intent);
+    }
+    
     public void copyLibFile() {
         if(nativeApp != null && !nativeApp.isEmpty()) {
             Path app = Paths.get(nativeApp);
