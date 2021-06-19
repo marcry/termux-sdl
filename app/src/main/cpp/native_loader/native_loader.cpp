@@ -77,14 +77,14 @@ void android_main(struct android_app *state) {
     // get activity object
     jobject act = state->activity->clazz;
 
-    jclass act_clazz = env->GetObjectClass(act); // class pointer of NativeActivity
-    jmethodID midGetIntent = env->GetMethodID(act_clazz, "getIntent", "()Landroid/content/Intent;");
+    jclass clazz_act = env->GetObjectClass(act); // class pointer of NativeActivity
+    jmethodID midGetIntent = env->GetMethodID(clazz_act, "getIntent", "()Landroid/content/Intent;");
     
     // get intent object
     jobject intent = env->CallObjectMethod(act, midGetIntent); // Get the intent
 
-    jclass intent_clazz = env->GetObjectClass(intent); // class pointer of Intent
-    jmethodID midGetStringExtra = env->GetMethodID(intent_clazz, "getStringExtra",
+    jclass clazz_intent = env->GetObjectClass(intent); // class pointer of Intent
+    jmethodID midGetStringExtra = env->GetMethodID(clazz_intent, "getStringExtra",
                                        "(Ljava/lang/String;)Ljava/lang/String;");
 
     // get the params from intent
