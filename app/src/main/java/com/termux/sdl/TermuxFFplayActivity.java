@@ -21,7 +21,6 @@ public class TermuxFFplayActivity extends SDLActivity {
             return;
         }
         super.onCreate(savedInstanceState);
-        
         // get the arguments from intent
         argv = getIntent().getStringExtra("argv");
     }
