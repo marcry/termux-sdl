@@ -178,7 +178,6 @@ public class TermuxSDLActivity extends SDLActivity {
         else 
             cmdEditText.setHint("Usage: ffplay [options] input_file");
 
-
         cmdEditText.requestFocus();
 
         // create dialog
