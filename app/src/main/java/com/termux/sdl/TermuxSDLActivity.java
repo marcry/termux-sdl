@@ -20,7 +20,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import org.libsdl.app.SDLActivity;
-import android.os.PersistableBundle;
 
 public class TermuxSDLActivity extends SDLActivity {
 
@@ -95,7 +94,6 @@ public class TermuxSDLActivity extends SDLActivity {
                     Log.i(TAG, "chdir to: " + pwd);
                     JNI.chDir(pwd);
                     JNI.setEnv("PWD", pwd, true);
-
                     // sdlmain = /data/user/0/com.termux.sdl/tmpdir/libxxx.so
                     sdlmain = file.toAbsolutePath().toString();
                 } catch(Exception e) {
@@ -208,7 +206,6 @@ public class TermuxSDLActivity extends SDLActivity {
         dialog.show();
     }
 
-
     // show the version information 
     public void showAboutDialog() {
         String versionName = null;
@@ -247,4 +244,3 @@ public class TermuxSDLActivity extends SDLActivity {
             .show();
     }
 }
-
