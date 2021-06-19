@@ -5,10 +5,12 @@ import android.app.NativeActivity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
-import android.widget.TextView;
-import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 
 public class TermuxNativeActivity extends Activity {
 
@@ -17,98 +19,68 @@ public class TermuxNativeActivity extends Activity {
     // the default native app 
     private String nativeApp = "libnative_loader.so";
 
-    // error message
-    private String errorMessage = null;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
         if((getIntent().getFlags() & Intent.FLAG_ACTIVITY_BROUGHT_TO_FRONT) != 0) {
-            finish();
+            this.finish();
             return;
         }
+        super.onCreate(savedInstanceState);
 
-        // nativeApp = your_project/libxxx.so
         nativeApp = getIntent().getStringExtra("nativeApp");
-
-        // loading native lib to internal directory
-        // to /data/user/0/com.termux.sdl/tmpdir
-        if(copyLibFile()) {
-            Intent intent = new Intent(this, NativeActivity.class);
-            // from jni: native_loader.cpp
-            intent.putExtra("nativeApp", nativeApp);
-            // start native app
-            startActivity(intent);
-            finish();
-        } else {
-            setContentView(R.layout.activity_native);
-            TextView textView = findViewById(R.id.nativeTextView);
-            if(errorMessage == null)
-                errorMessage = "Failed to load the nativeApp library, the parameters may be wrong.\n\n"
-                               + "Make sure the command is correct.\n\n"
-                               + "am start $(shell am 2>&1| grep -q '\\-\\-user' && echo '--user 0') -n com.termux.sdl/.TermuxNativeActivity -e nativeApp your_lib_pathname";
-            textView.setText(errorMessage);
-        }
+        Intent intent = new Intent(this, NativeActivity.class);
+        // from jni: native_loader.cpp
+        intent.putExtra("nativeApp", nativeApp);
+        // start native app
+        startActivity(intent);
+        finish();
     }
 
-
-    public boolean copyLibFile() {
-        if(nativeApp == null || nativeApp.isEmpty()) return false;
-        nativeApp = nativeApp.trim();
-        if((new File(nativeApp)).exists()) {
-            String libDir = getCacheDir().getParentFile().getAbsolutePath() + "/tmpdir";
-            String libFile = libDir + "/" + (new File(nativeApp)).getName();
-
-            if(!(new File(libDir)).exists()) {
-                (new File(libDir)).mkdir();
-            }
+    public void copyLibFile() {
+        Path app = Paths.get(nativeApp);
+        if(Files.exists(app)) {
+            Path dir = Paths.get(getCacheDir().getParentFile().getAbsolutePath() + "/tmpdir");
+            Path file = dir.resolve(app.getFileName());
 
             try {
-                FileUtils.copyFile(new File(nativeApp), new File(libFile));
-                Runtime.getRuntime().exec("chmod 755 " + libFile).waitFor();
+                if(!Files.exists(dir))
+                    Files.createDirectories(dir);
+
+                Files.copy(app, file, StandardCopyOption.REPLACE_EXISTING);
+                Runtime.getRuntime().exec("chmod 755 " + file.toAbsolutePath()).waitFor();
 
                 // Environment variables must be set, otherwise the program will not run correctly
-                String pwd = new File(nativeApp).getParentFile().getAbsolutePath();
+                String pwd = app.getParent().toAbsolutePath().toString();
                 Log.i(TAG, "chdir: " + pwd);
                 JNI.chDir(pwd);
                 JNI.setEnv("PWD", pwd, true);
                 // nativeApp = /data/user/0/com.termux.sdl/tmpdir/libxxx.so
-                nativeApp = libFile;
+                nativeApp = file.toAbsolutePath().toString();
 
-                FileOutputStream conf = new FileOutputStream(libDir + "/native_loader.conf");
-
+                FileOutputStream conf = new FileOutputStream(dir + "/native_loader.conf");
                 conf.write(nativeApp.getBytes());
                 conf.close();
 
-            } catch(IOException ex) {
-                Log.e(TAG, "copy file failed: " + ex.getMessage());
-                return false;
-            } catch(InterruptedException ex) {
-                Log.e(TAG, "exec cmd failed: " + ex.getMessage());
-                return false;
+            } catch(Exception e) {
+                e.printStackTrace();
             }
         }
-        return true;
     }
-
 
     public void deleteLibFile() {
         // delete /data/user/0/com.termux.sdl/tmpdir/libxxx.so
-        if(nativeApp != null && !nativeApp.isEmpty()) {
-            File file = new File(nativeApp);
-            if(file.exists()) {
-                FileUtils.deleteFile(file);
-            }
+        try {
+            Files.deleteIfExists(Paths.get(nativeApp));
+        } catch(IOException e) {
+            e.printStackTrace();
         }
     }
-
 
     @Override
     protected void onStop() {
         super.onStop();
         deleteLibFile();
     }
-
 
     @Override
     protected void onDestroy() {

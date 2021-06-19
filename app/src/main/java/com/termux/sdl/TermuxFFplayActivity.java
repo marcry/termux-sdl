@@ -5,7 +5,6 @@ import android.os.Bundle;
 import android.util.Log;
 import org.libsdl.app.SDLActivity;
 
-
 // using ffplay to playing video and audio 
 
 public class TermuxFFplayActivity extends SDLActivity {
@@ -15,21 +14,17 @@ public class TermuxFFplayActivity extends SDLActivity {
     // the ffplay command params
     private String argv = "ffplay";
 
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-
-        super.onCreate(savedInstanceState);
-        
         if((getIntent().getFlags() & Intent.FLAG_ACTIVITY_BROUGHT_TO_FRONT) != 0) {
-            finish();
+            this.finish();
             return;
         }
-
+        super.onCreate(savedInstanceState);
+        
         // get the arguments from intent
         argv = getIntent().getStringExtra("argv");
     }
-
 
     @Override
     protected String getMainSharedObject() {
@@ -39,7 +34,6 @@ public class TermuxFFplayActivity extends SDLActivity {
             return super.getMainSharedObject();
     }
 
-    
     @Override
     protected String[] getArguments() {
         if(argv != null && !argv.isEmpty())
@@ -52,7 +46,6 @@ public class TermuxFFplayActivity extends SDLActivity {
     protected void onStop() {
         super.onStop();
     }
-
 
     @Override
     protected void onDestroy() {

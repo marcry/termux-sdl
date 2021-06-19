@@ -141,11 +141,9 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
             super.handleMessage(msg);
 
             switch(msg.what) {
-
             case ANDROID_LOG_INFO:
                 textList.add((String)msg.obj);
                 text.append((String)msg.obj);
-                
                 break;
             case ANDROID_LOG_ERROR:
                 err = (String)msg.obj;
@@ -161,23 +159,15 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         }
     };
 
-
     // set brightness range[0..maxBrightness]
     public static void setRealBrightness(int brightness) {
-
         WindowManager.LayoutParams lp = mSingleton.getWindow().getAttributes();
-
         int maxBrightness = getMaxBrightness();
         
-        if(brightness < 0) 
-            brightness =0;
-        else if(brightness > maxBrightness)
-            brightness = maxBrightness;
-
+        brightness = Math.min(maxBrightness, Math.max(0, brightness));
         lp.screenBrightness = 1.0f * brightness / maxBrightness;
         mSingleton.getWindow().setAttributes(lp);
     }
-
 
     // cannot update the ui in the child thread
     // this method called by SDL from JNI
@@ -200,7 +190,6 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     // this method called by SDL from JNI
     public static int getBrightness() {
         int brightness = 0;
-       
         ContentResolver resolver = mSingleton.getContentResolver();
         try {
             brightness = android.provider.Settings.System.getInt(resolver, Settings.System.SCREEN_BRIGHTNESS);
@@ -208,7 +197,6 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         } catch(Exception e) {
             e.printStackTrace();
         }
-        
         return brightness ;
     }
 
@@ -226,7 +214,6 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         } catch(Exception e) {
             Log.e(TAG, e.getMessage());
         }
-
         return maxBrightness;
     }
 
@@ -234,11 +221,11 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     // enable/disable auto brightness
     public static boolean autoBrightness(boolean enable) {
         int result = 0;
-        if(enable) {
+        if(enable) 
             result = Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC; //开启
-        } else {
+        else 
             result = Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL;//关闭
-        }
+        
         return Settings.System.putInt(mSingleton.getContentResolver(),
                                       Settings.System.SCREEN_BRIGHTNESS_MODE,
                                       result);
@@ -266,11 +253,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
             //Log.i(TAG, "min volume: " + mAudioManager.getStreamMinVolume(AudioManager.STREAM_MUSIC));
             //Log.i(TAG, "max volume: " + mAudioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
             int maxVolume = mAudioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-            if(volume < 0) 
-                volume = 0;
-            else if(volume > maxVolume) 
-                volume = maxVolume;
-            
+            volume = Math.min(maxVolume, Math.max(0, volume));
             mAudioManager.setStreamVolume(AudioManager.STREAM_MUSIC, volume, AudioManager.FLAG_PLAY_SOUND);
         }
     }
@@ -279,27 +262,23 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     // this method called by SDL from JNI
     public static int getVolume() {
         int currVolume = 0;
-        if(mAudioManager != null) {
+        if(mAudioManager != null) 
             currVolume =  mAudioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
             //Log.i(TAG, "currVolume: " + currVolume);
-        }
         return currVolume;
     }
     
     // this method called by SDL from JNI
     public static int getMaxVolume(){
         int maxVolume = 0;
-        if(mAudioManager != null) {
+        if(mAudioManager != null) 
             maxVolume = mAudioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-        }
         return maxVolume;
     }
 
     // get log from SDL2
     protected static void nativeLogPrint(String info, int logLevel) {
-
         Message msg = null;
-
         if(logLevel == ANDROID_LOG_INFO)
             msg = mHandler.obtainMessage(ANDROID_LOG_INFO);
         else if(logLevel == ANDROID_LOG_ERROR)
@@ -320,7 +299,6 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         @Override
         public void beforeTextChanged(CharSequence s, int start, int count, int after) {
             // TODO: Implement this method
-           
         }
 
         @Override
@@ -331,7 +309,6 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         @Override
         public void afterTextChanged(Editable s) {
             // TODO: Implement this method
-
             int size = textList.size();
             // 当总共行数为MAX_LINE * 25 + 1时清空text文本，TextView显示大量的文本会卡顿
             int line = MAX_LINE * 25 + 1;
@@ -351,12 +328,10 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     
     // show logcat dialog
     public static void showLogcatDialog() {
-
         AlertDialog.Builder builder = new AlertDialog.Builder(mSingleton);
         builder.setView(scrollView);
        
         String error = mPreferences.getString("error", "");
-        
         if(!error.isEmpty() && text.getText().toString().isEmpty()) {
             text.setTextColor(Color.RED);
             text.setText(error);
@@ -370,26 +345,14 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         if(viewGroup != null) viewGroup.removeAllViewsInLayout();
 
         builder.setTitle("Logcat");
-        builder.setNegativeButton("clear", new DialogInterface.OnClickListener() {
-
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                text.setText("");
-                textList.clear();
-                mPreferences.edit().putString("error", "").commit();
-            }
+        builder.setNegativeButton("clear", (dialog, which) -> {
+            text.setText("");
+            textList.clear();
+            mPreferences.edit().putString("error", "").commit();
         });
-        builder.setPositiveButton(android.R.string.cancel, new DialogInterface.OnClickListener() {
-
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                dialog.dismiss();
-            }
-        });
+        builder.setPositiveButton(android.R.string.cancel, (dialog, which) -> dialog.dismiss());
         builder.setCancelable(true).show();
-        
     }
-
 
     // This is what SDL runs in. It invokes SDL_main(), eventually
     protected static Thread mSDLThread;
@@ -404,7 +367,6 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
                 mMotionListener = new SDLGenericMotionListener_API12();
             }
         }
-
         return mMotionListener;
     }
 
@@ -415,11 +377,11 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     protected String getMainSharedObject() {
         String library;
         String[] libraries = SDLActivity.mSingleton.getLibraries();
-        if(libraries.length > 0) {
+        if(libraries.length > 0) 
             library = "lib" + libraries[libraries.length - 1] + ".so";
-        } else {
+        else 
             library = "libmian.so";
-        }
+        
         return getContext().getApplicationInfo().nativeLibraryDir + "/" + library;
     }
 
