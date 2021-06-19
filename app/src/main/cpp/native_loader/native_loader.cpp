@@ -27,7 +27,7 @@
 
 #include "log.h"
 
-#define TAG "native-loader"
+#define TAG "native_loader"
 
 
 #ifdef __cplusplus
@@ -47,7 +47,6 @@ static char* get_app_pathname(const char *conf) {
     }
 
     fclose(fp);
-
     return pathname;
 }
 
@@ -58,7 +57,6 @@ static char* get_app_pathname(const char *conf) {
  * event loop for receiving input events and doing other things.
  */
 void android_main(struct android_app *state) {
-    
     char conf[PATH_MAX];
     char path[PATH_MAX];
     char *nativeApp = NULL;
@@ -77,32 +75,29 @@ void android_main(struct android_app *state) {
     state->activity->vm->AttachCurrentThread(&env, 0);
 
     // get activity object
-    jobject activity = state->activity->clazz;
+    jobject act = state->activity->clazz;
 
-    jclass class_activity = env->GetObjectClass(activity); // class pointer of NativeActivity
-    jmethodID midGetIntent = env->GetMethodID(class_activity, "getIntent", "()Landroid/content/Intent;");
+    jclass act_clazz = env->GetObjectClass(act); // class pointer of NativeActivity
+    jmethodID midGetIntent = env->GetMethodID(act_clazz, "getIntent", "()Landroid/content/Intent;");
     
     // get intent object
-    jobject intent = env->CallObjectMethod(activity, midGetIntent); // Get the intent
+    jobject intent = env->CallObjectMethod(act, midGetIntent); // Get the intent
 
-    jclass class_intent = env->GetObjectClass(intent); // class pointer of Intent
-    jmethodID midGetStringExtra = env->GetMethodID(class_intent, "getStringExtra",
+    jclass intent_clazz = env->GetObjectClass(intent); // class pointer of Intent
+    jmethodID midGetStringExtra = env->GetMethodID(intent_clazz, "getStringExtra",
                                        "(Ljava/lang/String;)Ljava/lang/String;");
 
     // get the params from intent
-    jstring jparams = (jstring) env->CallObjectMethod(intent, midGetStringExtra,
+    jstring app_params = (jstring) env->CallObjectMethod(intent, midGetStringExtra,
                                                        env->NewStringUTF("nativeApp"));
-
-    if (jparams) {
-        const char *param = env->GetStringUTFChars(jparams, 0);
-
+    if (app_params) {
+        const char *param = env->GetStringUTFChars(app_params, 0);
         LOGI(TAG, "nativeApp = %s\n", param);
 
         if (param != NULL) {
             nativeApp = strdup(param);
         }
-
-        env->ReleaseStringUTFChars(jparams, param);
+        env->ReleaseStringUTFChars(app_params, param);
     }
 
     state->activity->vm->DetachCurrentThread();
@@ -135,7 +130,6 @@ void android_main(struct android_app *state) {
         LOGE(TAG, "%s\n", dlerror());
         return;
     }
-
 
     *(void **) (&new_main) = dlsym(handle, "android_main");
     if ((error = dlerror()) != NULL) {

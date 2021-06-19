@@ -32,6 +32,7 @@ public class TermuxNativeActivity extends Activity {
         copyLibFile();
         
         Intent intent = new Intent(this, NativeActivity.class);
+        // pass parameters to native_loader
         intent.putExtra("nativeApp", nativeApp);
         // start native app
         startActivity(intent);
@@ -98,4 +99,3 @@ public class TermuxNativeActivity extends Activity {
         deleteLibFile();
     }
 }
-
